@@ -1,0 +1,18 @@
+appId: com.cincoscribe.app
+productName: CincoScribe
+win:
+  target: nsis
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+files:
+  - "**/*"
+  - "!server/**"
+  - "!.env"
+extraMetadata:
+  main: main.js
+publish:
+  provider: github
+  owner: vinayakawac
+  repo: cincoscribe-frontend
