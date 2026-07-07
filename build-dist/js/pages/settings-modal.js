@@ -56,15 +56,61 @@ async function renderSettingsPage(container) {
           <div style="margin-top: 12px; font-size: 12px; color: var(--clr-text-muted);">
             <strong>License Key:</strong> ${key.substring(0, 4)}...${key.substring(key.length - 4)}<br/>
             <strong>Activated:</strong> ${new Date(activatedAt).toLocaleDateString()}
+            <div style="margin-top: 16px;">
+              <button id="btn-deactivate" class="btn btn-danger" style="width: 100%; background: #ef4444; color: white; border: none; padding: 10px; border-radius: var(--radius); cursor: pointer; font-weight: 600;">
+                Deactivate License on this Device
+              </button>
+              <div id="deactivate-error" style="color: #ef4444; font-size: 12px; margin-top: 8px; display: none;"></div>
+            </div>
           </div>
         ` : `
           <div style="margin-top: 12px; font-size: 12px; color: var(--clr-text-muted);">
             If you have purchased a license, restart the app to enter your activation key.
+            <div style="margin-top: 16px;">
+              <a href="https://YOUR_LEMON_SQUEEZY_CHECKOUT_URL_HERE" target="_blank" style="text-decoration: none;">
+                <button class="btn btn-primary" style="width: 100%; padding: 10px; cursor: pointer; font-weight: 600;">
+                  Upgrade Now - Purchase a License
+                </button>
+              </a>
+            </div>
           </div>
         `}
       </div>
     </div>
   `;
+
+  // Bind deactivate button logic
+  if (key) {
+    const btnDeactivate = container.querySelector('#btn-deactivate');
+    const deactivateError = container.querySelector('#deactivate-error');
+    
+    if (btnDeactivate) {
+      btnDeactivate.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to deactivate your license? This device will be locked.')) return;
+        
+        btnDeactivate.textContent = 'Deactivating...';
+        btnDeactivate.disabled = true;
+        
+        try {
+          const result = await window.electronAPI.deactivate(key);
+          if (result.valid) {
+            await window.electronAPI.clearActivation();
+            window.electronAPI.deactivationComplete();
+          } else {
+            deactivateError.textContent = 'Failed to deactivate: ' + (result.reason || 'Unknown error');
+            deactivateError.style.display = 'block';
+            btnDeactivate.textContent = 'Deactivate License on this Device';
+            btnDeactivate.disabled = false;
+          }
+        } catch (err) {
+          deactivateError.textContent = 'Error: ' + err.message;
+          deactivateError.style.display = 'block';
+          btnDeactivate.textContent = 'Deactivate License on this Device';
+          btnDeactivate.disabled = false;
+        }
+      });
+    }
+  }
 }
 
 Router.register('dashboard/settings', renderSettingsPage);

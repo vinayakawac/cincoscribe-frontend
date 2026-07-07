@@ -47,6 +47,28 @@
     button:disabled {
       background: #444;
     }
+    .btn-purchase {
+      background: #10b981;
+      margin-top: 15px;
+    }
+    .btn-purchase:hover {
+      background: #059669;
+    }
+    .divider {
+      margin: 20px 0;
+      border-top: 1px solid #333;
+      position: relative;
+    }
+    .divider span {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a1a;
+      padding: 0 10px;
+      color: #888;
+      font-size: 12px;
+    }
     #error {
       color: #ff4444;
       margin-top: 10px;
@@ -73,6 +95,12 @@
     <button id="activateBtn">Activate</button>
     <div class="spinner" id="spinner"></div>
     <div id="error"></div>
+    
+    <div class="divider"><span>OR</span></div>
+    
+    <a href="https://YOUR_LEMON_SQUEEZY_CHECKOUT_URL_HERE" target="_blank" style="text-decoration: none;">
+      <button type="button" class="btn-purchase">Purchase a License</button>
+    </a>
   </div>
 
   <script>
