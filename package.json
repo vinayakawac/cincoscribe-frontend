@@ -18,5 +18,8 @@
     "electron-builder": "^26.15.3",
     "fs-extra": "^11.3.6",
     "javascript-obfuscator": "^5.4.3"
+  },
+  "overrides": {
+    "@noble/hashes": "1.2.0"
   }
 }
