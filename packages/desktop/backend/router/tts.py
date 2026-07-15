@@ -15,14 +15,20 @@ class TTSPayload(BaseModel):
     voice: str = Field("default")
     speed: float = Field(1.0, ge=0.5, le=2.0)
 
+import asyncio
+
 @router.get("/engines/tts")
 def get_tts_engines():
     return {"engines": ["sherpa-onnx"]}
 
 @router.post("/tts")
-def tts_generate(payload: TTSPayload):
+async def tts_generate(payload: TTSPayload):
     try:
-        audio_bytes = tts_engine.generate(payload.text, payload.voice)
+        audio_bytes = await asyncio.to_thread(
+            tts_engine.generate,
+            payload.text,
+            payload.voice
+        )
     except EngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:

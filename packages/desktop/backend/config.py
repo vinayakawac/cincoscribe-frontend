@@ -2,7 +2,7 @@ import os
 import shutil
 from pathlib import Path
 
-DEFAULT_MODELS_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models")))
+DEFAULT_MODELS_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".models")))
 models_dir = DEFAULT_MODELS_DIR
 
 def update_models_dir(new_path_str: str):

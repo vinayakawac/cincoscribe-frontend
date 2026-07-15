@@ -51,7 +51,7 @@ function renderTextToVoicePage(container) {
           { id: 'tada_3b', name: 'TADA 3B Multilingual' }
         ];
         
-        const trueDownloaded = ttsModelsInfo.filter(m => data.tts[m.id] === true);
+        const trueDownloaded = ttsModelsInfo.filter(m => data.tts[m.id] === true || m.id === 'kokoro');
         if (trueDownloaded.length > 0) {
           downloadedModels = trueDownloaded;
         }
@@ -147,9 +147,6 @@ function renderTextToVoicePage(container) {
         <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Voice</label>
         <div class="voice-select-card" id="btn-select-voice" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); transition: background var(--dur-fast);">
           <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; width: 90%;">
-            <div class="voice-avatar" style="width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--clr-primary) 0%, oklch(0.6 0.15 30) 100%); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: black; flex-shrink: 0;">
-              ${selectedVoice.charAt(0)}
-            </div>
             <span style="font-size: 13px; font-weight: 500; color: var(--clr-text); text-overflow: ellipsis; overflow: hidden;">${selectedVoice} - ${desc}</span>
           </div>
           <span style="color: var(--clr-text-muted); font-size: 12px; margin-left: 6px; transform: ${showVoiceGrid ? 'rotate(90deg)' : 'none'}; transition: transform var(--dur-fast);">&gt;</span>
@@ -333,7 +330,6 @@ function renderTextToVoicePage(container) {
     if (modelSelectEl) {
       modelSelectEl.addEventListener('change', () => {
         modelSize = modelSelectEl.value;
-        render();
       });
     }
 
@@ -397,8 +393,9 @@ function renderTextToVoicePage(container) {
     const playerSlider = document.getElementById('player-slider');
 
     if (realAudio && playPauseBtn) {
-      // Set audio source to generated speech
-      realAudio.src = `data:audio/wav;base64,${generatedAudioBase64}`;
+      if (generatedAudioBase64) {
+        realAudio.src = `data:audio/wav;base64,${generatedAudioBase64}`;
+      }
 
       playPauseBtn.addEventListener('click', () => {
         if (realAudio.paused) {
@@ -457,12 +454,51 @@ function renderTextToVoicePage(container) {
     try {
       updateProgress('Loading voice model and synthesis pipeline...', 25);
 
-      const response = await window.electronAPI.generateSpeech({
-        text: text.trim(),
-        voice: selectedVoice,
-        speed: speed,
-        modelSize: modelSize
-      });
+      let response;
+      if (window.electronAPI && window.electronAPI.generateSpeech) {
+        response = await window.electronAPI.generateSpeech({
+          text: text.trim(),
+          voice: selectedVoice,
+          speed: speed,
+          modelSize: modelSize
+        });
+      } else {
+        // Fallback to sidecar API directly over HTTP
+        let port = 3901;
+        if (window.electronAPI) {
+          port = await window.electronAPI.getSidecarPort();
+        }
+        
+        const res = await fetch(`http://127.0.0.1:${port}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text.trim(),
+            voice: selectedVoice,
+            speed: speed
+          })
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result;
+              resolve(result.substring(result.indexOf(',') + 1));
+            };
+            reader.readAsDataURL(blob);
+          });
+          response = {
+            success: true,
+            audioData: base64,
+            duration: text.trim().split(/\s+/).length * 0.4
+          };
+        } else {
+          const errText = await res.text();
+          throw new Error(errText || 'TTS generation failed on sidecar');
+        }
+      }
 
       if (response && response.success && response.audioData) {
         updateProgress('Processing synthesized audio...', 90);

@@ -21,13 +21,20 @@ class ASRPayload(BaseModel):
     language: str = "auto"
     model_size: str = "base"
 
+import asyncio
+
 @router.post("/transcribe")
 async def asr_transcribe(payload: ASRPayload):
     if not os.path.exists(payload.audio_path):
         raise HTTPException(status_code=400, detail="File not found")
         
     try:
-        result = asr_engine.transcribe(payload.audio_path, payload.language, payload.model_size)
+        result = await asyncio.to_thread(
+            asr_engine.transcribe,
+            payload.audio_path,
+            payload.language,
+            payload.model_size
+        )
         return result
     except EngineError as e:
         raise HTTPException(status_code=500, detail=str(e))

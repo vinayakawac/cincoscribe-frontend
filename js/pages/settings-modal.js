@@ -2,7 +2,7 @@
 /* All license, activation, and LemonSqueezy code removed.  */
 
 async function renderSettingsPage(container) {
-  let settings = { language: 'auto', whisperMode: 'base', modelsDir: '' };
+  let settings = { language: 'auto', whisperMode: 'base', modelsDir: '', internetAccessAllowed: true };
 
   if (window.electronAPI && window.electronAPI.getSettings) {
     try {
@@ -15,6 +15,11 @@ async function renderSettingsPage(container) {
   let language = settings.language || 'auto';
   let whisperMode = settings.whisperMode || 'base';
   let modelsDir = settings.modelsDir || '';
+  let internetAccessAllowed = settings.internetAccessAllowed !== false;
+
+  if (AppState.internetAccessAllowed !== undefined) {
+    internetAccessAllowed = AppState.internetAccessAllowed;
+  }
   
   let activeTab = 'general';
   let isServerOnline = false;
@@ -273,6 +278,18 @@ async function renderSettingsPage(container) {
           </select>
         </div>
 
+        <!-- Internet Access -->
+        <div class="setting-group">
+          <div class="setting-info">
+            <h4 class="setting-label">Internet Access</h4>
+            <p class="setting-desc">Permit downloading models and checking for updates online.</p>
+          </div>
+          <select id="settings-internet" style="padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text); border-radius: var(--radius); font-size: 13px; min-width: 150px;">
+            <option value="true" ${internetAccessAllowed === true ? 'selected' : ''}>On</option>
+            <option value="false" ${internetAccessAllowed === false ? 'selected' : ''}>Off</option>
+          </select>
+        </div>
+
         <!-- Theme Selection -->
         <div class="setting-group" style="border-bottom: none;">
           <div class="setting-info">
@@ -381,7 +398,7 @@ async function renderSettingsPage(container) {
           </div>
           <div>
             <h2 style="font-family: var(--ff-display); font-size: 22px; font-weight: 700; color: var(--clr-text); margin: 0;">CincoScribe</h2>
-            <p style="font-size: 12px; color: var(--clr-text-faint); margin: 4px 0 0 0;">v2.0.0</p>
+            <p style="font-size: 12px; color: var(--clr-text-faint); margin: 4px 0 0 0;">v0.1.0</p>
           </div>
           <p style="font-size: 13px; color: var(--clr-text-muted); max-width: 480px; line-height: 1.5; margin: 0;">
             The open-source local transcription and voice synthesis studio. Transcribe audio, synthesize speech, and run voice models locally on your CPU.
@@ -425,9 +442,15 @@ async function renderSettingsPage(container) {
       language = document.getElementById('settings-language')?.value || language;
       whisperMode = document.getElementById('settings-whisper-mode')?.value || whisperMode;
       modelsDir = document.getElementById('settings-models-dir')?.value || modelsDir;
+      const internetVal = document.getElementById('settings-internet')?.value === 'true';
+      internetAccessAllowed = internetVal;
+
+      AppState.internetAccessAllowed = internetVal;
+      localStorage.setItem('internetAccessAllowed', internetVal ? 'true' : 'false');
+      AppState.save();
 
       if (window.electronAPI && window.electronAPI.saveSettings) {
-        await window.electronAPI.saveSettings({ language, whisperMode, modelsDir });
+        await window.electronAPI.saveSettings({ language, whisperMode, modelsDir, internetAccessAllowed });
       }
 
       const statusEl = document.getElementById('save-status');

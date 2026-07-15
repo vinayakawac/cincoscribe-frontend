@@ -32,7 +32,17 @@ class SherpaTTS(TTSBackend):
                 allow_patterns=["*.onnx", "*.txt", "espeak-ng-data/*"]
             )
 
+        # Check ONNX Runtime GPU support
+        provider = "cpu"
+        try:
+            import torch
+            if torch.cuda.is_available():
+                provider = "cuda"
+        except ImportError:
+            pass
+
         import sherpa_onnx
+        logger.info(f"Initializing SherpaTTS with provider={provider}")
         model_config = sherpa_onnx.OfflineTtsModelConfig(
             vits=sherpa_onnx.OfflineTtsVitsModelConfig(
                 model=str(self.model_path / "model.onnx"),
@@ -40,7 +50,7 @@ class SherpaTTS(TTSBackend):
                 tokens=str(self.model_path / "tokens.txt"),
                 data_dir=str(self.model_path / "espeak-ng-data"),
             ),
-            provider="cpu",
+            provider=provider,
             num_threads=2,
             debug=False,
         )

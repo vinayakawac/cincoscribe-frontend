@@ -1,6 +1,7 @@
 /* ===== Transcribe Page — Real Whisper Transcription ===== */
 
 function renderTranscribePage(container) {
+  const whisper = window.WhisperTranscriber;
   let selectedFile = null;
   let fileDuration = 0;
   let modelSize = 'base'; // 'base' | 'small' | 'medium' | 'large' | 'turbo'
@@ -13,6 +14,43 @@ function renderTranscribePage(container) {
   let liveTranscript = [];
   let activeTranscriptTab = 'plain'; // 'timestamps' | 'plain'
 
+  let downloadedModels = [
+    { id: 'base', name: 'Whisper Base' } // Default fallback
+  ];
+
+  async function fetchModelStatus() {
+    try {
+      let port = 3901;
+      if (window.electronAPI) {
+        port = await window.electronAPI.getSidecarPort();
+      }
+      const res = await fetch(`http://127.0.0.1:${port}/engines/models/status`);
+      if (res.ok) {
+        const data = await res.json();
+        const asrModelsInfo = [
+          { id: 'base', name: 'Whisper Base' },
+          { id: 'small', name: 'Whisper Small' },
+          { id: 'medium', name: 'Whisper Medium' },
+          { id: 'large', name: 'Whisper Large' },
+          { id: 'turbo', name: 'Whisper Turbo' }
+        ];
+        
+        // Show only downloaded models
+        const trueDownloaded = asrModelsInfo.filter(m => data.asr[m.id] === true || m.id === 'base');
+        if (trueDownloaded.length > 0) {
+          downloadedModels = trueDownloaded;
+        }
+        
+        if (!downloadedModels.some(m => m.id === modelSize)) {
+          modelSize = downloadedModels[0].id;
+        }
+        render();
+      }
+    } catch (e) {
+      console.error('Failed to fetch model status', e);
+    }
+  }
+
   function render() {
     container.innerHTML = `
       <div class="page-container no-scroll-layout">
@@ -23,7 +61,7 @@ function renderTranscribePage(container) {
             ${transcript ? renderTranscript() : ''}
           </div>
           <div class="layout-sidebar" style="gap: var(--sp-5);">
-            ${renderModeCards()}
+            ${renderModelSelectorZone()}
             ${renderFormatModeSelector()}
             ${renderActionRow()}
           </div>
@@ -101,34 +139,19 @@ function renderTranscribePage(container) {
     `;
   }
 
-  function renderModeCards() {
-    const disabled = isTranscribing;
-    const models = [
-      { id: 'base', name: 'Whisper Base', size: '~145MB', desc: 'Light CPU. Standard speed & accuracy. (Pre-installed)' },
-      { id: 'small', name: 'Whisper Small', size: '~460MB', desc: 'Medium CPU. Better details, internet required.' },
-      { id: 'medium', name: 'Whisper Medium', size: '~1.5GB', desc: 'Heavy CPU. High accuracy, internet required.' },
-      { id: 'large', name: 'Whisper Large', size: '~3.0GB', desc: 'Very Heavy CPU. Highest accuracy, internet required.' },
-      { id: 'turbo', name: 'Whisper Turbo', size: '~1.6GB', desc: 'Heavy CPU. Speed-optimized, internet required.' }
-    ];
-
+  function renderModelSelectorZone() {
     return `
       <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
         <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Transcription Model</label>
-        <div class="option-card-grid" style="gap: var(--sp-2);">
-          ${models.map(m => `
-            <div class="option-card ${modelSize === m.id ? 'selected' : ''} ${disabled ? 'disabled' : ''}" data-model-id="${m.id}" style="border: none; background: var(--clr-bg-subtle); padding: 12px 16px; border-radius: var(--radius-lg); ${disabled ? 'pointer-events: none; opacity: 0.6;' : ''}">
-              <div class="option-card-info">
-                <div class="option-card-title-row">
-                  <span class="option-card-name">
-                    ${Utils.icons.target} ${m.name}
-                  </span>
-                  <span class="option-card-badge">${m.size}</span>
-                </div>
-                <p class="option-card-desc">${m.desc}</p>
-              </div>
-              <div class="mode-radio"></div>
-            </div>
-          `).join('')}
+        <div style="position: relative; width: 100%;">
+          <select id="select-model" style="width: 100%; padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--clr-text); border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); outline: none; appearance: none; cursor: pointer;">
+            ${downloadedModels.map(m => `
+              <option value="${m.id}" ${modelSize === m.id ? 'selected' : ''}>${m.name}</option>
+            `).join('')}
+          </select>
+          <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--clr-text-muted); font-size: 10px;">
+            ▼
+          </div>
         </div>
       </div>
     `;
@@ -352,13 +375,13 @@ function renderTranscribePage(container) {
       });
     }
 
-    document.querySelectorAll('[data-model-id]').forEach(card => {
-      card.addEventListener('click', () => {
-        if (isTranscribing) return;
-        modelSize = card.getAttribute('data-model-id');
-        render();
+    // Model Selector dropdown selection
+    const modelSelectEl = document.getElementById('select-model');
+    if (modelSelectEl) {
+      modelSelectEl.addEventListener('change', () => {
+        modelSize = modelSelectEl.value;
       });
-    });
+    }
 
     const formatModeSelect = document.getElementById('format-mode-select');
     if (formatModeSelect) {
@@ -436,12 +459,17 @@ function renderTranscribePage(container) {
     render();
 
     try {
-      const mode = modelSize === 'base' ? 'accuracy' : 'accuracy';
+      const apiKey = AppState.openAiKey;
       
-      // Step 1: Load model if using local transcription
-      if (AppState.transcriptionMode === 'local') {
+      // Ensure model is loaded if doing local transcription
+      if (!apiKey) {
+        if (!whisper) {
+          throw new Error('Whisper service is not loaded on this page.');
+        }
+        
+        // Map UI modelSize to WhisperTranscriber key
+        const mode = modelSize === 'base' ? 'accuracy' : 'fast';
         const targetModel = whisper.models[mode] || whisper.models.fast;
-        const modelSizeLabel = mode === 'accuracy' ? '~74MB' : '~40MB';
         
         if (!whisper.isReady || whisper.currentLoadedModel !== targetModel) {
           updateProgress('Downloading Whisper AI model (' + modelSize + ')... First time only.', 0);
@@ -458,7 +486,6 @@ function renderTranscribePage(container) {
           });
         }
         
-        // Double-check the model actually loaded
         if (!whisper.isReady) {
           throw new Error('Model failed to load. Please refresh the page and try again.');
         }
@@ -508,6 +535,7 @@ function renderTranscribePage(container) {
     render();
   }
 
+  fetchModelStatus();
   render();
 }
 

@@ -232,6 +232,7 @@
 
   <!-- ═══════════════ Scripts ═══════════════ -->
 
+  <script src="js/whisper.js?v=7"></script>
   <script src="js/state.js?v=7"></script>
   <script src="js/utils.js?v=7"></script>
   <script src="js/router.js?v=7"></script>
@@ -245,6 +246,16 @@
   <script src="js/pages/models.js?v=7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // ── Ask for Internet Access (Once at startup) ───────
+      if (localStorage.getItem('internetAccessAllowed') === null) {
+        const allowed = confirm("Do you allow CincoScribe to access the internet to download models and check for updates?");
+        localStorage.setItem('internetAccessAllowed', allowed ? 'true' : 'false');
+        AppState.internetAccessAllowed = allowed;
+        AppState.save();
+      } else {
+        AppState.internetAccessAllowed = localStorage.getItem('internetAccessAllowed') === 'true';
+      }
+
       // ── Topbar page title sync ───────────────────────────
       const pageNames = {
         'dashboard/transcribe': 'Transcribe',

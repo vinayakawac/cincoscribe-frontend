@@ -19,6 +19,7 @@ function renderModelsPage(container) {
   let currentModelsDir = '';
   let isDownloading = {};
   let errorMessage = '';
+  let pollingInterval = null;
 
   async function fetchStatus() {
     try {
@@ -31,7 +32,22 @@ function renderModelsPage(container) {
         const data = await res.json();
         modelStatus = data;
         currentModelsDir = data.current_models_dir || '';
-        errorMessage = '';
+        
+        // Sync local isDownloading with backend downloading list
+        isDownloading = {};
+        if (data.downloading) {
+          data.downloading.forEach(key => {
+            isDownloading[key] = true;
+          });
+        }
+        
+        // Check if there are download errors to display
+        if (data.errors && Object.keys(data.errors).length > 0) {
+          const firstErrKey = Object.keys(data.errors)[0];
+          errorMessage = `Download failed for ${firstErrKey.replace(':', ' ')}: ${data.errors[firstErrKey]}`;
+        } else {
+          errorMessage = '';
+        }
       } else {
         errorMessage = 'Failed to fetch model status from sidecar backend.';
       }
@@ -40,7 +56,38 @@ function renderModelsPage(container) {
     }
   }
 
+  function startPolling() {
+    if (!pollingInterval) {
+      pollingInterval = setInterval(async () => {
+        // If container is no longer in document body, clear and return
+        if (!document.body.contains(container)) {
+          stopPolling();
+          return;
+        }
+        await fetchStatus();
+        render();
+        // If nothing is downloading anymore, stop polling
+        if (!modelStatus.downloading || modelStatus.downloading.length === 0) {
+          stopPolling();
+        }
+      }, 2000);
+    }
+  }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }
+
   async function triggerDownload(modelType, modelName) {
+    if (localStorage.getItem('internetAccessAllowed') === 'false') {
+      errorMessage = "Internet access is disabled in Settings. Please enable it to download models.";
+      render();
+      return;
+    }
+
     const key = `${modelType}:${modelName}`;
     if (isDownloading[key]) return;
     
@@ -59,8 +106,7 @@ function renderModelsPage(container) {
         body: JSON.stringify({ model_type: modelType, model_name: modelName })
       });
       if (res.ok) {
-        isDownloading[key] = false;
-        await fetchStatus();
+        startPolling();
       } else {
         const err = await res.json();
         throw new Error(err.detail || 'Download failed');
@@ -75,6 +121,9 @@ function renderModelsPage(container) {
   async function init() {
     await fetchStatus();
     render();
+    if (modelStatus.downloading && modelStatus.downloading.length > 0) {
+      startPolling();
+    }
   }
 
   function render() {

@@ -27,7 +27,8 @@ const store = new Store({
     openAiKey:  { type: 'string' },
     language:   { type: 'string' },
     whisperMode:{ type: 'string' },
-    modelsDir:  { type: 'string' }
+    modelsDir:  { type: 'string' },
+    internetAccessAllowed: { type: 'boolean' }
   }
 });
 
@@ -207,12 +208,14 @@ ipcMain.handle('get-settings', () => ({
   language:    store.get('language', 'auto'),
   whisperMode: store.get('whisperMode', 'fast'),
   modelsDir:   store.get('modelsDir', ''),
+  internetAccessAllowed: store.get('internetAccessAllowed', true),
 }));
 
 ipcMain.handle('save-settings', async (_event, settings) => {
   if (typeof settings.openAiKey  === 'string') store.set('openAiKey',  settings.openAiKey);
   if (typeof settings.language   === 'string') store.set('language',   settings.language);
   if (typeof settings.whisperMode=== 'string') store.set('whisperMode',settings.whisperMode);
+  if (typeof settings.internetAccessAllowed === 'boolean') store.set('internetAccessAllowed', settings.internetAccessAllowed);
   if (typeof settings.modelsDir  === 'string') {
     const oldDir = store.get('modelsDir');
     if (oldDir !== settings.modelsDir) {

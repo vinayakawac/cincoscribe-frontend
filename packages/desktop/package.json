@@ -1,6 +1,6 @@
 {
   "name": "@cincoscribe/desktop",
-  "version": "2.0.0",
+  "version": "0.1.0",
   "description": "CincoScribe Desktop — free, MIT, local-first transcription and TTS",
   "main": "main.js",
   "scripts": {

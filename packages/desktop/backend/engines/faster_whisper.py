@@ -58,11 +58,21 @@ class FasterWhisperASR(ASRBackend):
             load_target = f"openai/whisper-{repo_size}"
             logger.info(f"Downloading and loading Whisper model {model_size} from HuggingFace Hub ({load_target})...")
 
+        # Automatic device and compute type selection
         try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            compute_type = "float16" if device == "cuda" else "int8"
+        except ImportError:
+            device = "cpu"
+            compute_type = "int8"
+
+        try:
+            logger.info(f"Initializing WhisperModel on device={device} compute_type={compute_type}")
             self._model = WhisperModel(
                 load_target,
-                device="cpu",
-                compute_type="int8",
+                device=device,
+                compute_type=compute_type,
                 download_root=str(self.models_dir),
                 cpu_threads=4
             )

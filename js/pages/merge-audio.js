@@ -245,8 +245,28 @@ function renderMergeAudioPage(container) {
         });
       }
 
-      const response = await window.electronAPI.mergeAudio({ files: fileDataList });
-      
+      let response;
+      if (window.electronAPI && window.electronAPI.mergeAudio) {
+        response = await window.electronAPI.mergeAudio({ files: fileDataList });
+      } else {
+        // Fallback to fetch from Python sidecar
+        let port = 3901;
+        if (window.electronAPI) {
+          port = await window.electronAPI.getSidecarPort();
+        }
+        const res = await fetch(`http://127.0.0.1:${port}/merge-audio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: fileDataList })
+        });
+        if (res.ok) {
+          response = await res.json();
+        } else {
+          const errText = await res.text();
+          throw new Error(errText || 'Failed to merge audio via sidecar HTTP');
+        }
+      }
+
       if (response && response.success && response.audioData) {
         const raw = window.atob(response.audioData);
         const rawLength = raw.length;
