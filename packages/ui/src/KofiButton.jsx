@@ -9,7 +9,7 @@ import React from 'react';
  * Props:
  *   handle  string  Ko-fi username (no @ prefix)
  */
-export function KofiButton({ handle = 'cincoscribe' }) {
+export function KofiButton({ handle = 'vinayaka' }) {
   return (
     <a
       href={`https://ko-fi.com/${handle}`}

@@ -11,9 +11,6 @@ function renderMergeAudioPage(container) {
         <div class="page-header">
           <h1 class="page-title">Merge <span class="page-title-sub">Audio Files</span></h1>
           <p class="page-subtitle">Combine multiple audio files into a single track — completely free</p>
-          <div class="page-steps">
-            <span class="pill"><span style="display:flex; margin-right:4px;">${Utils.icons.unlock}</span> Free feature — no credits required</span>
-          </div>
         </div>
 
         <div class="upload-zone" id="merge-upload-zone">
@@ -127,7 +124,7 @@ function renderMergeAudioPage(container) {
   function addFiles(newFiles) {
     const audioFiles = newFiles.filter(f => {
       const ext = f.name.split('.').pop().toLowerCase();
-      return f.type.startsWith('audio/') || ['mp3','wav','m4a','ogg','flac','webm','aac'].includes(ext);
+      return f.type.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'webm', 'aac'].includes(ext);
     });
     if (audioFiles.length === 0) {
       Utils.showToast('Please select valid audio files.');

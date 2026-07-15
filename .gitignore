@@ -92,7 +92,7 @@ Desktop.ini
 .agents/
 .claude/
 .codex/
-.github/
+.github/agents/
 .vscode/
 *.swp
 *.swo
