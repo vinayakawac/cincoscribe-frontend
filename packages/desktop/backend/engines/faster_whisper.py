@@ -13,14 +13,18 @@ class FasterWhisperASR(ASRBackend):
         self._model = None
         
     def _get_local_model_path(self, model_size: str) -> str:
-        hf_name = model_size
-        if model_size == "large":
-            hf_name = "large-v3"
-        elif model_size == "turbo":
-            hf_name = "large-v3-turbo"
+        folder_names = {
+            "base": "models--openai--whisper-base",
+            "small": "models--openai--whisper-small",
+            "medium": "models--openai--whisper-medium",
+            "large": "models--openai--whisper-large-v3",
+            "turbo": "models--openai--whisper-large-v3-turbo"
+        }
+        folder_name = folder_names.get(model_size)
+        if not folder_name:
+            return None
             
-        model_folder = f"models--Systran--faster-whisper-{hf_name}"
-        snapshots_dir = self.models_dir / "faster-whisper" / model_folder / "snapshots"
+        snapshots_dir = self.models_dir / folder_name / "snapshots"
         if snapshots_dir.exists():
             snapshots = [p for p in snapshots_dir.iterdir() if p.is_dir()]
             if snapshots:
@@ -51,15 +55,15 @@ class FasterWhisperASR(ASRBackend):
                 repo_size = "large-v3"
             elif model_size == "turbo":
                 repo_size = "large-v3-turbo"
-            load_target = f"Systran/faster-whisper-{repo_size}"
-            logger.info(f"Downloading and loading Whisper model {model_size} from HuggingFace Hub...")
+            load_target = f"openai/whisper-{repo_size}"
+            logger.info(f"Downloading and loading Whisper model {model_size} from HuggingFace Hub ({load_target})...")
 
         try:
             self._model = WhisperModel(
                 load_target,
                 device="cpu",
                 compute_type="int8",
-                download_root=str(self.models_dir / "faster-whisper"),
+                download_root=str(self.models_dir),
                 cpu_threads=4
             )
             self._current_size = model_size

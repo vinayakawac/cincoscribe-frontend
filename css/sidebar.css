@@ -22,8 +22,9 @@
   transition: width var(--dur-slow) var(--ease-expo-out);
 }
 
-/* Hover expand */
-.sidebar:hover {
+/* Hover or pinned expand */
+.sidebar:hover,
+.sidebar.pinned {
   width: var(--rail-expanded-w);
 }
 
@@ -100,7 +101,8 @@
               opacity var(--dur-normal) var(--ease-out);
 }
 
-.sidebar:hover .sidebar-logo-text {
+.sidebar:hover .sidebar-logo-text,
+.sidebar.pinned .sidebar-logo-text {
   max-width: 140px;
   opacity: 1;
 }
@@ -181,7 +183,8 @@
   font-size: var(--fs-sm);
 }
 
-.sidebar:hover .nav-link-label {
+.sidebar:hover .nav-link-label,
+.sidebar.pinned .nav-link-label {
   max-width: 160px;
   opacity: 1;
   margin-left: 10px;
@@ -205,7 +208,8 @@
   margin-left: 0;
 }
 
-.sidebar:hover .nav-badge {
+.sidebar:hover .nav-badge,
+.sidebar.pinned .nav-badge {
   max-width: 50px;
   opacity: 1;
   margin-left: var(--sp-1);
@@ -262,7 +266,8 @@
   margin-left: 0;
 }
 
-.sidebar:hover .user-info {
+.sidebar:hover .user-info,
+.sidebar.pinned .user-info {
   max-width: 140px;
   opacity: 1;
   margin-left: 10px;
@@ -384,5 +389,37 @@
   padding-left: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
+}
+
+/* Sidebar Pin Button */
+.btn-pin-sidebar {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--clr-text-muted);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast), color var(--dur-fast), opacity var(--dur-normal) var(--ease-out);
+  opacity: 0;
+  pointer-events: none;
+  margin-left: auto;
+}
+
+.sidebar:hover .btn-pin-sidebar,
+.sidebar.pinned .btn-pin-sidebar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-pin-sidebar:hover {
+  background: var(--clr-hover);
+  color: var(--clr-text);
+}
+
+.sidebar.pinned .btn-pin-sidebar {
+  color: var(--clr-primary);
 }
 

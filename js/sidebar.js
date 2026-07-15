@@ -9,6 +9,21 @@ const Sidebar = {
       });
     });
 
+    // Desktop Pin toggle
+    const pinBtn = document.getElementById('btn-pin-sidebar');
+    const sidebar = document.getElementById('sidebar-desktop');
+    if (pinBtn && sidebar) {
+      const isPinned = localStorage.getItem('cincoscribe_sidebar_pinned') === 'true';
+      if (isPinned) {
+        sidebar.classList.add('pinned');
+      }
+      pinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentlyPinned = sidebar.classList.toggle('pinned');
+        localStorage.setItem('cincoscribe_sidebar_pinned', currentlyPinned);
+      });
+    }
+
     // Mobile menu open
     const menuBtn = document.getElementById('btn-mobile-menu');
     if (menuBtn) {

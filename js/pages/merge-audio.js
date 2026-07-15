@@ -7,65 +7,148 @@ function renderMergeAudioPage(container) {
 
   function render() {
     container.innerHTML = `
-      <div class="page-container page-sections">
-        <div class="page-header">
+      <div class="page-container">
+        <div class="page-header" style="margin-bottom: 0;">
           <h1 class="page-title">Merge <span class="page-title-sub">Audio Files</span></h1>
           <p class="page-subtitle">Combine multiple audio files into a single track — completely free</p>
         </div>
 
-        <div class="upload-zone" id="merge-upload-zone">
-          <input type="file" accept="audio/*" multiple id="merge-file-input">
-          <div class="upload-zone-content">
-            <div class="upload-icon-wrapper">
-              ${Utils.icons.layers}
+        <div class="split-layout">
+          <div class="layout-main">
+            <div class="upload-zone" id="merge-upload-zone" style="${files.length > 0 ? 'padding: 24px var(--sp-4);' : ''}">
+              <input type="file" accept="audio/*" multiple id="merge-file-input">
+              <div class="upload-zone-content">
+                <div class="upload-icon-wrapper" style="${files.length > 0 ? 'width:42px; height:42px; margin-bottom:0;' : ''}">
+                  ${Utils.icons.layers}
+                </div>
+                <p class="upload-title" style="${files.length > 0 ? 'font-size:var(--fs-sm);' : ''}">Drop audio files here or click to browse</p>
+                ${files.length === 0 ? `<p class="upload-subtitle">Add 2 or more audio files to merge them in order</p>` : ''}
+              </div>
             </div>
-            <p class="upload-title">Drop audio files here or click to browse</p>
-            <p class="upload-subtitle">Add 2 or more audio files to merge them in order</p>
+
+            ${files.length > 0 ? renderFileList() : ''}
+            ${mergedBlob ? renderMergedResult() : ''}
+          </div>
+
+          <div class="layout-sidebar">
+            ${renderSidebarStats()}
           </div>
         </div>
-
-        ${files.length > 0 ? `
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-2);">
-              <span style="font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--clr-text);">${files.length} file${files.length !== 1 ? 's' : ''} added</span>
-              <button class="btn-ghost" id="btn-clear-all">${Utils.icons.trash} Clear all</button>
-            </div>
-            <div class="merge-file-list">
-              ${files.map((f, i) => `
-                <div class="merge-file-item">
-                  <span class="merge-file-item-name">${f.name}</span>
-                  <span class="merge-file-item-size">${Utils.formatFileSize(f.size)}</span>
-                  <button class="merge-file-remove" data-remove="${i}" title="Remove">${Utils.icons.x}</button>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <button class="btn btn-primary" id="btn-merge" ${files.length < 2 || isMerging ? 'disabled' : ''} style="width:100%">
-          ${isMerging ? 'Merging audio...' : `Merge ${files.length} File${files.length !== 1 ? 's' : ''}`}
-        </button>
-
-        ${mergedBlob ? `
-          <div class="card">
-            <div class="card-body" style="display:flex; flex-direction:column; align-items:center; gap:var(--sp-4);">
-              <div style="display:flex; align-items:center; gap:var(--sp-2); color:var(--clr-text); font-size:var(--fs-sm); font-weight:var(--fw-medium);">
-                ${Utils.icons.check} Merge Complete
-              </div>
-              <audio controls id="merged-audio" style="width:100%; max-width:400px;"></audio>
-              <button class="btn btn-outline btn-sm" id="btn-download-merged">${Utils.icons.download} Download Merged Audio</button>
-            </div>
-          </div>
-        ` : ''}
       </div>
     `;
     bindEvents();
 
-    // Set audio src after DOM is in place
     if (mergedBlob) {
       const audio = document.getElementById('merged-audio');
       if (audio) audio.src = URL.createObjectURL(mergedBlob);
     }
+  }
+
+  function renderFileList() {
+    return `
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-2);">
+          <span class="badge badge-primary">${files.length} file${files.length !== 1 ? 's' : ''} added</span>
+          <button class="btn-ghost" id="btn-clear-all" style="color: var(--clr-error);">${Utils.icons.trash} Clear all</button>
+        </div>
+        <div class="merge-file-list">
+          ${files.map((f, i) => {
+            const isFirst = i === 0;
+            const isLast = i === files.length - 1;
+            return `
+              <div class="merge-file-item" style="padding: 10px 14px; gap: var(--sp-3);">
+                <span class="badge badge-primary" style="font-family: var(--ff-display); font-size: 10px; padding: 2px 6px;">#${i + 1}</span>
+                <div class="merge-file-info">
+                  <div class="merge-file-name" title="${escapeHtml(f.name)}" style="font-size: 13px;">${escapeHtml(f.name)}</div>
+                  <div class="merge-file-meta" style="font-size: 10px;">${Utils.formatFileSize(f.size)}</div>
+                </div>
+                
+                <!-- Up / Down Reorder Controls -->
+                <div class="merge-item-controls">
+                  <button class="btn-merge-control" data-move-up="${i}" title="Move up" ${isFirst ? 'disabled' : ''}>
+                    ${Utils.icons.chevronUp || `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`}
+                  </button>
+                  <button class="btn-merge-control" data-move-down="${i}" title="Move down" ${isLast ? 'disabled' : ''}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                </div>
+
+                <button class="merge-file-remove btn-icon-sm" data-remove="${i}" title="Remove file" style="color: var(--clr-error);">
+                  ${Utils.icons.x}
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSidebarStats() {
+    const disabled = files.length < 2 || isMerging;
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    return `
+      <div class="settings-section-card">
+        <label class="settings-section-title">Merge summary</label>
+        <div class="transcript-stats" style="flex-direction: column; gap: var(--sp-2); border: none; background: none; padding: 0; margin: 0; font-size:11px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="stat-label">Total Files</span>
+            <span class="stat-value">${files.length}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="stat-label">Combined Size</span>
+            <span class="stat-value">${Utils.formatFileSize(totalSize)}</span>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" id="btn-merge" ${disabled ? 'disabled' : ''} style="width:100%; margin-top: var(--sp-2);">
+          ${isMerging ? 'Merging audio...' : `Merge Files`}
+        </button>
+      </div>
+      
+      <div class="info-strip" style="background: var(--clr-primary-subtle); border-color: var(--clr-border); margin: 0;">
+        <span class="info-strip-icon">${Utils.icons.info}</span>
+        <span style="font-size: 11px;">Combine multiple tracks into one sequence. Order them using the arrows, then click Merge.</span>
+      </div>
+    `;
+  }
+
+  function renderMergedResult() {
+    return `
+      <div class="card" style="border-color: var(--clr-border);">
+        <div style="display:flex; flex-direction:column; gap:var(--sp-4);">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="display:flex; align-items:center; gap:var(--sp-2); color:var(--clr-text); font-size:var(--fs-sm); font-weight:var(--fw-medium);">
+              ${Utils.icons.check} Merge Complete
+            </div>
+            <button class="btn btn-outline btn-sm" id="btn-download-merged">${Utils.icons.download} Download</button>
+          </div>
+          
+          <!-- Hidden real audio -->
+          <audio id="merged-audio" style="display:none;"></audio>
+          
+          <!-- Custom player UI -->
+          <div class="custom-audio-player">
+            <button class="custom-player-btn" id="custom-play-pause-btn">
+              ${Utils.icons.play}
+            </button>
+            <div class="custom-player-timeline">
+              <span class="custom-player-time" id="player-time-current">0:00</span>
+              <div class="custom-player-slider" id="player-slider">
+                <div class="custom-player-progress" id="player-progress"></div>
+              </div>
+              <span class="custom-player-time" id="player-time-duration">0:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   function bindEvents() {
@@ -73,7 +156,10 @@ function renderMergeAudioPage(container) {
     const fileInput = document.getElementById('merge-file-input');
 
     if (zone && fileInput) {
-      zone.addEventListener('click', () => fileInput.click());
+      zone.addEventListener('click', (e) => {
+        if (e.target.closest('.merge-file-remove') || e.target.closest('.btn-merge-control')) return;
+        fileInput.click();
+      });
       zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         zone.classList.add('dragover');
@@ -91,11 +177,40 @@ function renderMergeAudioPage(container) {
     }
 
     document.querySelectorAll('[data-remove]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.getAttribute('data-remove'));
         files.splice(idx, 1);
         mergedBlob = null;
         render();
+      });
+    });
+
+    document.querySelectorAll('[data-move-up]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-move-up'));
+        if (idx > 0) {
+          const temp = files[idx];
+          files[idx] = files[idx - 1];
+          files[idx - 1] = temp;
+          mergedBlob = null;
+          render();
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-move-down]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-move-down'));
+        if (idx < files.length - 1) {
+          const temp = files[idx];
+          files[idx] = files[idx + 1];
+          files[idx + 1] = temp;
+          mergedBlob = null;
+          render();
+        }
       });
     });
 
@@ -118,6 +233,59 @@ function renderMergeAudioPage(container) {
       dlBtn.addEventListener('click', () => {
         if (mergedBlob) Utils.downloadBlob(mergedBlob, 'merged_audio.wav');
       });
+    }
+
+    // Custom Player Event Listeners
+    const realAudio = document.getElementById('merged-audio');
+    const playPauseBtn = document.getElementById('custom-play-pause-btn');
+    const timeCurrent = document.getElementById('player-time-current');
+    const timeDuration = document.getElementById('player-time-duration');
+    const progressFill = document.getElementById('player-progress');
+    const playerSlider = document.getElementById('player-slider');
+
+    if (realAudio && playPauseBtn) {
+      playPauseBtn.addEventListener('click', () => {
+        if (realAudio.paused) {
+          realAudio.play();
+          playPauseBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>`;
+        } else {
+          realAudio.pause();
+          playPauseBtn.innerHTML = Utils.icons.play;
+        }
+      });
+
+      realAudio.addEventListener('timeupdate', () => {
+        const cur = realAudio.currentTime;
+        const dur = realAudio.duration || 0;
+        if (timeCurrent) timeCurrent.textContent = Utils.formatTimestamp(cur);
+        if (timeDuration && dur) timeDuration.textContent = Utils.formatTimestamp(dur);
+        if (progressFill && dur > 0) {
+          progressFill.style.width = (cur / dur * 100) + '%';
+        }
+      });
+
+      realAudio.addEventListener('loadedmetadata', () => {
+        const dur = realAudio.duration || 0;
+        if (timeDuration && dur) timeDuration.textContent = Utils.formatTimestamp(dur);
+      });
+
+      realAudio.addEventListener('ended', () => {
+        playPauseBtn.innerHTML = Utils.icons.play;
+        if (progressFill) progressFill.style.width = '0%';
+        if (timeCurrent) timeCurrent.textContent = '0:00';
+      });
+
+      if (playerSlider) {
+        playerSlider.addEventListener('click', (e) => {
+          const rect = playerSlider.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const percentage = clickX / rect.width;
+          const dur = realAudio.duration || 0;
+          if (dur > 0) {
+            realAudio.currentTime = percentage * dur;
+          }
+        });
+      }
     }
   }
 

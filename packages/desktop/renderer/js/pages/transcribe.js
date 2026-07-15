@@ -10,24 +10,39 @@ function renderTranscribePage(container) {
   let progressPct = 0;
   let transcript = null;
   let liveTranscript = [];
+  let activeTranscriptTab = 'timestamps'; // 'timestamps' | 'plain'
 
   function render() {
     container.innerHTML = `
-      <div class="page-container page-sections">
+      <div class="page-container">
         ${renderHeader()}
-        ${renderUploadZone()}
-        ${renderModeCards()}
-        ${renderActionRow()}
-        ${isTranscribing ? renderProgress() : ''}
-        ${transcript ? renderTranscript() : ''}
+        <div class="split-layout">
+          <div class="layout-main">
+            ${renderUploadZone()}
+            ${isTranscribing ? renderProgress() : ''}
+            ${transcript ? renderTranscript() : ''}
+          </div>
+          <div class="layout-sidebar">
+            ${renderModeCards()}
+            ${renderActionRow()}
+          </div>
+        </div>
       </div>
     `;
     bindEvents();
+    
+    // Set preview source if file selected
+    if (selectedFile && !isTranscribing) {
+      const preview = document.getElementById('preview-audio');
+      if (preview) {
+        preview.src = URL.createObjectURL(selectedFile);
+      }
+    }
   }
 
   function renderHeader() {
     return `
-      <div class="page-header">
+      <div class="page-header" style="margin-bottom: 0;">
         <h1 class="page-title">Turn Audio Into <span class="page-title-sub">Accurate Text</span></h1>
         <p class="page-subtitle">Upload any audio for AI transcription powered by Whisper</p>
       </div>
@@ -36,17 +51,42 @@ function renderTranscribePage(container) {
 
   function renderUploadZone() {
     if (selectedFile) {
+      const isW = isTranscribing;
       return `
-        <div class="upload-zone" id="upload-zone">
-          <input type="file" accept="audio/*,video/mp4,video/webm" id="file-input">
-          <div class="upload-file-info">
-            <div class="upload-icon-wrapper">
-              <span style="font-size:22px; display:flex;">${Utils.icons.music}</span>
+        <div class="uploaded-file-card">
+          <div class="uploaded-file-header">
+            <div class="uploaded-file-icon">
+              ${Utils.icons.music}
             </div>
-            <p class="upload-file-name">${selectedFile.name}</p>
-            <p class="upload-file-meta">${Utils.formatFileSize(selectedFile.size)}${fileDuration ? ' · ' + Utils.formatDuration(fileDuration) : ''}</p>
-            <button class="upload-file-remove" id="btn-remove-file">Remove file</button>
+            <div class="uploaded-file-details">
+              <p class="uploaded-file-name-text" title="${escapeHtml(selectedFile.name)}">${escapeHtml(selectedFile.name)}</p>
+              <div class="uploaded-file-meta-text">
+                <span>${Utils.formatFileSize(selectedFile.size)}</span>
+                <span>•</span>
+                <span>${fileDuration ? Utils.formatDuration(fileDuration) : 'Calculating...'}</span>
+              </div>
+            </div>
+            <div class="uploaded-file-actions">
+              <div class="waveform-simulation ${isW ? 'active' : ''}">
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+                <div class="waveform-bar"></div>
+              </div>
+              <button class="btn-icon-sm" id="btn-remove-file" title="Remove file" ${isW ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                ${Utils.icons.x}
+              </button>
+            </div>
           </div>
+          ${!isW && fileDuration ? `
+            <div style="margin-top: var(--sp-2);">
+              <audio id="preview-audio" controls style="width: 100%; height: 32px; border-radius: var(--radius-md); accent-color: var(--clr-primary);"></audio>
+            </div>
+          ` : ''}
         </div>
       `;
     }
@@ -71,19 +111,33 @@ function renderTranscribePage(container) {
 
   function renderModeCards() {
     const disabled = isTranscribing;
+    const models = [
+      { id: 'base', name: 'Whisper Base', size: '~145MB', desc: 'Light CPU. Standard speed & accuracy. (Pre-installed)' },
+      { id: 'small', name: 'Whisper Small', size: '~460MB', desc: 'Medium CPU. Better details, internet required.' },
+      { id: 'medium', name: 'Whisper Medium', size: '~1.5GB', desc: 'Heavy CPU. High accuracy, internet required.' },
+      { id: 'large', name: 'Whisper Large', size: '~3.0GB', desc: 'Very Heavy CPU. Highest accuracy, internet required.' },
+      { id: 'turbo', name: 'Whisper Turbo', size: '~1.6GB', desc: 'Heavy CPU. Speed-optimized, internet required.' }
+    ];
+
     return `
-      <div class="card" style="display:flex; flex-direction:column; gap:var(--sp-3); border-color: var(--clr-border);">
-        <label class="form-label" style="font-weight: 600;">Transcription Model</label>
-        <p style="font-size: var(--fs-xs); color: var(--clr-text-muted); margin: 0;">
-          Select the Whisper model size. Larger models offer higher accuracy but consume more CPU and memory.
-        </p>
-        <select id="model-size-select" ${disabled ? 'disabled' : ''} style="width: 100%; padding: 8px 12px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text); border-radius: var(--radius); font-size: 13px; margin-top: 4px;">
-          <option value="base" ${modelSize === 'base' ? 'selected' : ''}>Whisper Base (~145MB) — Light CPU (Pre-installed)</option>
-          <option value="small" ${modelSize === 'small' ? 'selected' : ''}>Whisper Small (~460MB) — Medium CPU (Internet required)</option>
-          <option value="medium" ${modelSize === 'medium' ? 'selected' : ''}>Whisper Medium (~1.5GB) — Heavy CPU (Internet required)</option>
-          <option value="large" ${modelSize === 'large' ? 'selected' : ''}>Whisper Large (~3.0GB) — Very Heavy CPU (Internet required)</option>
-          <option value="turbo" ${modelSize === 'turbo' ? 'selected' : ''}>Whisper Turbo (~1.6GB) — Heavy CPU (Internet required)</option>
-        </select>
+      <div class="settings-section-card">
+        <label class="settings-section-title">Transcription Model</label>
+        <div class="option-card-grid">
+          ${models.map(m => `
+            <div class="option-card ${modelSize === m.id ? 'selected' : ''} ${disabled ? 'disabled' : ''}" data-model-id="${m.id}" style="${disabled ? 'pointer-events: none; opacity: 0.6;' : ''}">
+              <div class="option-card-info">
+                <div class="option-card-title-row">
+                  <span class="option-card-name">
+                    ${Utils.icons.target} ${m.name}
+                  </span>
+                  <span class="option-card-badge">${m.size}</span>
+                </div>
+                <p class="option-card-desc">${m.desc}</p>
+              </div>
+              <div class="mode-radio"></div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
@@ -91,42 +145,45 @@ function renderTranscribePage(container) {
   function renderActionRow() {
     const disabled = !selectedFile || isTranscribing;
     return `
-      <div class="action-row">
-        <div class="select-wrapper">
-          <select id="lang-select" ${disabled ? 'disabled' : ''}>
-            <option value="auto">Auto-detect Language</option>
-            <option value="en">English</option>
-            <option value="hi">Hindi</option>
-            <option value="ar">Arabic</option>
-            <option value="zh">Chinese</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="pt">Portuguese</option>
-            <option value="ru">Russian</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="it">Italian</option>
-            <option value="tr">Turkish</option>
-            <option value="ur">Urdu</option>
-            <option value="bn">Bengali</option>
-            <option value="pa">Punjabi</option>
-            <option value="id">Indonesian</option>
-            <option value="ms">Malay</option>
-            <option value="nl">Dutch</option>
-            <option value="pl">Polish</option>
-            <option value="sv">Swedish</option>
-            <option value="fa">Persian</option>
-            <option value="vi">Vietnamese</option>
-            <option value="th">Thai</option>
-          </select>
-          <span class="select-chevron">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
+      <div class="settings-section-card">
+        <label class="settings-section-title">Language &amp; Action</label>
+        <div style="display:flex; flex-direction:column; gap:var(--sp-3);">
+          <div class="select-wrapper">
+            <select id="lang-select" ${disabled ? 'disabled' : ''} style="width: 100%;">
+              <option value="auto">Auto-detect Language</option>
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="ar">Arabic</option>
+              <option value="zh">Chinese</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="pt">Portuguese</option>
+              <option value="ru">Russian</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="it">Italian</option>
+              <option value="tr">Turkish</option>
+              <option value="ur">Urdu</option>
+              <option value="bn">Bengali</option>
+              <option value="pa">Punjabi</option>
+              <option value="id">Indonesian</option>
+              <option value="ms">Malay</option>
+              <option value="nl">Dutch</option>
+              <option value="pl">Polish</option>
+              <option value="sv">Swedish</option>
+              <option value="fa">Persian</option>
+              <option value="vi">Vietnamese</option>
+              <option value="th">Thai</option>
+            </select>
+            <span class="select-chevron">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </div>
+          <button class="btn btn-primary" id="btn-transcribe" ${disabled ? 'disabled' : ''} style="width: 100%;">
+            Transcribe Audio
+          </button>
         </div>
-        <button class="btn btn-primary" id="btn-transcribe" ${disabled ? 'disabled' : ''}>
-          Transcribe Audio
-        </button>
       </div>
     `;
   }
@@ -190,6 +247,9 @@ function renderTranscribePage(container) {
 
   function renderTranscript() {
     const formatted = transcript.formatted;
+    const plainText = transcript.text;
+    const textToShow = activeTranscriptTab === 'timestamps' ? formatted : plainText;
+
     return `
       <div class="transcript-panel">
         <div class="transcript-header">
@@ -198,17 +258,23 @@ function renderTranscribePage(container) {
             Transcript
           </div>
           <div class="transcript-actions">
-            <button class="btn-ghost" id="btn-copy">${Utils.icons.copy} Copy all</button>
-            <button class="btn-ghost" id="btn-download">${Utils.icons.download} Download .txt</button>
+            <button class="btn-ghost" id="btn-copy">${Utils.icons.copy} Copy</button>
+            <button class="btn-ghost" id="btn-download">${Utils.icons.download} Download</button>
           </div>
         </div>
+
+        <div class="layout-tabs" style="margin: 0; padding: 0 10px; background: var(--clr-bg-subtle); border-bottom: 1px solid var(--clr-border);">
+          <div class="layout-tab ${activeTranscriptTab === 'timestamps' ? 'active' : ''}" data-tab-id="timestamps">Timestamps</div>
+          <div class="layout-tab ${activeTranscriptTab === 'plain' ? 'active' : ''}" data-tab-id="plain">Plain Text</div>
+        </div>
+
         <div class="transcript-stats">
           <span><span class="stat-label">Duration </span><span class="stat-value">${Utils.formatDuration(transcript.duration)}</span></span>
           <span><span class="stat-label">Words </span><span class="stat-value">${Utils.formatNumber(transcript.wordCount)}</span></span>
           <span><span class="stat-label">Segments </span><span class="stat-value">${Utils.formatNumber(transcript.segmentCount)}</span></span>
         </div>
-        <div class="transcript-body">
-          <pre>${escapeHtml(formatted)}</pre>
+        <div class="transcript-body" style="background: var(--clr-bg-code);">
+          <pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(textToShow)}</pre>
         </div>
       </div>
     `;
@@ -226,7 +292,7 @@ function renderTranscribePage(container) {
 
     if (zone && fileInput) {
       zone.addEventListener('click', (e) => {
-        if (e.target.id === 'btn-remove-file') return;
+        if (e.target.id === 'btn-remove-file' || e.target.closest('#btn-remove-file')) return;
         fileInput.click();
       });
 
@@ -259,13 +325,13 @@ function renderTranscribePage(container) {
       });
     }
 
-    const modelSizeSelect = document.getElementById('model-size-select');
-    if (modelSizeSelect) {
-      modelSizeSelect.value = modelSize;
-      modelSizeSelect.addEventListener('change', () => {
-        modelSize = modelSizeSelect.value;
+    document.querySelectorAll('[data-model-id]').forEach(card => {
+      card.addEventListener('click', () => {
+        if (isTranscribing) return;
+        modelSize = card.getAttribute('data-model-id');
+        render();
       });
-    }
+    });
 
     const langSelect = document.getElementById('lang-select');
     if (langSelect) {
@@ -280,18 +346,28 @@ function renderTranscribePage(container) {
       transcribeBtn.addEventListener('click', startTranscription);
     }
 
+    document.querySelectorAll('.layout-tab[data-tab-id]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        activeTranscriptTab = tab.getAttribute('data-tab-id');
+        render();
+      });
+    });
+
     const copyBtn = document.getElementById('btn-copy');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
-        Utils.copyToClipboard(transcript.formatted);
+        const textToCopy = activeTranscriptTab === 'timestamps' ? transcript.formatted : transcript.text;
+        Utils.copyToClipboard(textToCopy);
       });
     }
 
     const downloadBtn = document.getElementById('btn-download');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => {
+        const textToDownload = activeTranscriptTab === 'timestamps' ? transcript.formatted : transcript.text;
         const name = selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript';
-        Utils.downloadText(transcript.formatted, name + '_transcript.txt');
+        const suffix = activeTranscriptTab === 'timestamps' ? '_timestamps.txt' : '_plain.txt';
+        Utils.downloadText(textToDownload, name + suffix);
       });
     }
   }
