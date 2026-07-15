@@ -4,26 +4,27 @@ function renderTranscribePage(container) {
   let selectedFile = null;
   let fileDuration = 0;
   let modelSize = 'base'; // 'base' | 'small' | 'medium' | 'large' | 'turbo'
-  let language = 'en';
+  let language = 'auto';
+  let formatMode = 'normal'; // 'normal' | 'timestamps'
   let isTranscribing = false;
   let statusMessage = '';
   let progressPct = 0;
   let transcript = null;
   let liveTranscript = [];
-  let activeTranscriptTab = 'timestamps'; // 'timestamps' | 'plain'
+  let activeTranscriptTab = 'plain'; // 'timestamps' | 'plain'
 
   function render() {
     container.innerHTML = `
-      <div class="page-container">
-        ${renderHeader()}
+      <div class="page-container no-scroll-layout">
         <div class="split-layout">
           <div class="layout-main">
             ${renderUploadZone()}
             ${isTranscribing ? renderProgress() : ''}
             ${transcript ? renderTranscript() : ''}
           </div>
-          <div class="layout-sidebar">
+          <div class="layout-sidebar" style="gap: var(--sp-5);">
             ${renderModeCards()}
+            ${renderFormatModeSelector()}
             ${renderActionRow()}
           </div>
         </div>
@@ -40,21 +41,12 @@ function renderTranscribePage(container) {
     }
   }
 
-  function renderHeader() {
-    return `
-      <div class="page-header" style="margin-bottom: 0;">
-        <h1 class="page-title">Turn Audio Into <span class="page-title-sub">Accurate Text</span></h1>
-        <p class="page-subtitle">Upload any audio for AI transcription powered by Whisper</p>
-      </div>
-    `;
-  }
-
   function renderUploadZone() {
     if (selectedFile) {
       const isW = isTranscribing;
       return `
-        <div class="uploaded-file-card">
-          <div class="uploaded-file-header">
+        <div class="uploaded-file-card" style="border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-xl); padding: var(--sp-5);">
+          <div class="uploaded-file-header" style="border: none; padding: 0;">
             <div class="uploaded-file-icon">
               ${Utils.icons.music}
             </div>
@@ -83,7 +75,7 @@ function renderTranscribePage(container) {
             </div>
           </div>
           ${!isW && fileDuration ? `
-            <div style="margin-top: var(--sp-2);">
+            <div style="margin-top: var(--sp-3);">
               <audio id="preview-audio" controls style="width: 100%; height: 32px; border-radius: var(--radius-md); accent-color: var(--clr-primary);"></audio>
             </div>
           ` : ''}
@@ -91,7 +83,7 @@ function renderTranscribePage(container) {
       `;
     }
     return `
-      <div class="upload-zone" id="upload-zone">
+      <div class="upload-zone" id="upload-zone" style="border: 2px dashed var(--clr-border-med); background: var(--clr-bg-subtle); border-radius: var(--radius-xl); padding: var(--sp-6);">
         <input type="file" accept="audio/*,video/mp4,video/webm" id="file-input">
         <div class="upload-zone-content">
           <div class="upload-icon-wrapper">
@@ -120,11 +112,11 @@ function renderTranscribePage(container) {
     ];
 
     return `
-      <div class="settings-section-card">
-        <label class="settings-section-title">Transcription Model</label>
-        <div class="option-card-grid">
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Transcription Model</label>
+        <div class="option-card-grid" style="gap: var(--sp-2);">
           ${models.map(m => `
-            <div class="option-card ${modelSize === m.id ? 'selected' : ''} ${disabled ? 'disabled' : ''}" data-model-id="${m.id}" style="${disabled ? 'pointer-events: none; opacity: 0.6;' : ''}">
+            <div class="option-card ${modelSize === m.id ? 'selected' : ''} ${disabled ? 'disabled' : ''}" data-model-id="${m.id}" style="border: none; background: var(--clr-bg-subtle); padding: 12px 16px; border-radius: var(--radius-lg); ${disabled ? 'pointer-events: none; opacity: 0.6;' : ''}">
               <div class="option-card-info">
                 <div class="option-card-title-row">
                   <span class="option-card-name">
@@ -142,14 +134,32 @@ function renderTranscribePage(container) {
     `;
   }
 
+  function renderFormatModeSelector() {
+    const disabled = isTranscribing;
+    return `
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Transcription Mode</label>
+        <div style="position: relative; width: 100%;">
+          <select id="format-mode-select" ${disabled ? 'disabled' : ''} style="width: 100%; padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--clr-text); border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); outline: none; appearance: none; cursor: pointer;">
+            <option value="normal" ${formatMode === 'normal' ? 'selected' : ''}>Normal (Formatted Paragraphs)</option>
+            <option value="timestamps" ${formatMode === 'timestamps' ? 'selected' : ''}>Timestamps Mode</option>
+          </select>
+          <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--clr-text-muted); font-size: 10px;">
+            ▼
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderActionRow() {
     const disabled = !selectedFile || isTranscribing;
     return `
-      <div class="settings-section-card">
-        <label class="settings-section-title">Language &amp; Action</label>
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Language &amp; Action</label>
         <div style="display:flex; flex-direction:column; gap:var(--sp-3);">
-          <div class="select-wrapper">
-            <select id="lang-select" ${disabled ? 'disabled' : ''} style="width: 100%;">
+          <div style="position: relative; width: 100%;">
+            <select id="lang-select" ${disabled ? 'disabled' : ''} style="width: 100%; padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--clr-text); border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); outline: none; appearance: none; cursor: pointer;">
               <option value="auto">Auto-detect Language</option>
               <option value="en">English</option>
               <option value="hi">Hindi</option>
@@ -176,12 +186,12 @@ function renderTranscribePage(container) {
               <option value="vi">Vietnamese</option>
               <option value="th">Thai</option>
             </select>
-            <span class="select-chevron">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
+            <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--clr-text-muted); font-size: 10px;">
+              ▼
+            </div>
           </div>
-          <button class="btn btn-primary" id="btn-transcribe" ${disabled ? 'disabled' : ''} style="width: 100%;">
-            Transcribe Audio
+          <button class="btn btn-primary" id="btn-transcribe" ${disabled ? 'disabled' : ''} style="background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 10px 18px; font-size: 13px; width: 100%; margin-top: var(--sp-2);">
+            ${isTranscribing ? 'Transcribing...' : 'Transcribe Audio'}
           </button>
         </div>
       </div>
@@ -190,8 +200,8 @@ function renderTranscribePage(container) {
 
   function renderProgress() {
     return `
-      <div class="transcript-panel">
-        <div class="progress-container" id="progress-area">
+      <div class="transcript-panel" style="margin-top: 10px; border: none; padding: 0; background: transparent;">
+        <div class="progress-container" id="progress-area" style="padding: 0;">
           <div class="progress-bar-wrapper">
             <div class="progress-bar-fill" id="progress-bar" style="width:${progressPct}%"></div>
           </div>
@@ -199,12 +209,11 @@ function renderTranscribePage(container) {
           <p class="progress-percent" id="progress-pct">${Math.round(progressPct)}%</p>
         </div>
         ${liveTranscript.length > 0 ? `
-        <div class="live-transcript-box">
-          <div class="live-transcript-header">
-            <span style="display:flex;align-items:center;">${Utils.icons.bolt}</span>
-            <span>Agent is thinking (Transcribing live)...</span>
+        <div class="live-transcript-box" style="border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-lg); padding: 12px 14px; margin-top: 8px;">
+          <div class="live-transcript-header" style="font-size: 11px; margin-bottom: 6px; color: var(--clr-primary);">
+            <span style="display:flex;align-items:center; gap: 4px;">${Utils.icons.bolt} Transcribing live...</span>
           </div>
-          <div class="live-transcript-content" id="live-transcript-content">
+          <div class="live-transcript-content" id="live-transcript-content" style="font-size: 13px; max-height: 120px; overflow-y: auto; line-height: 1.5; color: var(--clr-text-muted);">
             ${escapeHtml(liveTranscript.map(c => c.text).join(' '))}
             <span class="live-transcript-cursor"></span>
           </div>
@@ -251,8 +260,8 @@ function renderTranscribePage(container) {
     const textToShow = activeTranscriptTab === 'timestamps' ? formatted : plainText;
 
     return `
-      <div class="transcript-panel">
-        <div class="transcript-header">
+      <div class="transcript-panel" style="border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-xl); padding: var(--sp-4); gap: var(--sp-3); display: flex; flex-direction: column; flex: 1; min-height: 0;">
+        <div class="transcript-header" style="border: none; padding: 0;">
           <div class="transcript-title">
             ${Utils.icons.check}
             Transcript
@@ -263,18 +272,19 @@ function renderTranscribePage(container) {
           </div>
         </div>
 
-        <div class="layout-tabs" style="margin: 0; padding: 0 10px; background: var(--clr-bg-subtle); border-bottom: 1px solid var(--clr-border);">
-          <div class="layout-tab ${activeTranscriptTab === 'timestamps' ? 'active' : ''}" data-tab-id="timestamps">Timestamps</div>
-          <div class="layout-tab ${activeTranscriptTab === 'plain' ? 'active' : ''}" data-tab-id="plain">Plain Text</div>
+        <div class="layout-tabs" style="margin: 0; padding: 0; background: transparent; border: none;">
+          <div class="layout-tab ${activeTranscriptTab === 'timestamps' ? 'active' : ''}" data-tab-id="timestamps" style="font-size: 13px;">Timestamps</div>
+          <div class="layout-tab ${activeTranscriptTab === 'plain' ? 'active' : ''}" data-tab-id="plain" style="font-size: 13px;">Plain Text</div>
         </div>
 
-        <div class="transcript-stats">
-          <span><span class="stat-label">Duration </span><span class="stat-value">${Utils.formatDuration(transcript.duration)}</span></span>
-          <span><span class="stat-label">Words </span><span class="stat-value">${Utils.formatNumber(transcript.wordCount)}</span></span>
-          <span><span class="stat-label">Segments </span><span class="stat-value">${Utils.formatNumber(transcript.segmentCount)}</span></span>
+        <div class="transcript-stats" style="border: none; background: transparent; padding: 0; margin: 0; font-size: 11px;">
+          <span><span class="stat-label">Duration </span><span class="stat-value" style="font-weight: 600; color: var(--clr-text);">${Utils.formatDuration(transcript.duration)}</span></span>
+          <span><span class="stat-label">Words </span><span class="stat-value" style="font-weight: 600; color: var(--clr-text);">${Utils.formatNumber(transcript.wordCount)}</span></span>
+          <span><span class="stat-label">Segments </span><span class="stat-value" style="font-weight: 600; color: var(--clr-text);">${Utils.formatNumber(transcript.segmentCount)}</span></span>
         </div>
-        <div class="transcript-body" style="background: var(--clr-bg-code);">
-          <pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(textToShow)}</pre>
+        
+        <div class="transcript-body" style="background: var(--clr-bg-code); border: none; border-radius: var(--radius-lg); padding: var(--sp-4); flex: 1; min-height: 0;">
+          <pre style="margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--clr-text-muted); font-family: var(--ff-mono);">${escapeHtml(textToShow)}</pre>
         </div>
       </div>
     `;
@@ -284,6 +294,23 @@ function renderTranscribePage(container) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function formatParagraphs(text) {
+    if (!text) return '';
+    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
+    const paragraphs = [];
+    let currentParagraph = [];
+    
+    for (let i = 0; i < sentences.length; i++) {
+      currentParagraph.push(sentences[i].trim());
+      if (currentParagraph.length === 3 || i === sentences.length - 1) {
+        paragraphs.push(currentParagraph.join(' '));
+        currentParagraph = [];
+      }
+    }
+    
+    return paragraphs.join('\n\n');
   }
 
   function bindEvents() {
@@ -316,11 +343,11 @@ function renderTranscribePage(container) {
 
     const removeBtn = document.getElementById('btn-remove-file');
     if (removeBtn) {
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+      removeBtn.addEventListener('click', () => {
         selectedFile = null;
         fileDuration = 0;
         transcript = null;
+        liveTranscript = [];
         render();
       });
     }
@@ -332,6 +359,14 @@ function renderTranscribePage(container) {
         render();
       });
     });
+
+    const formatModeSelect = document.getElementById('format-mode-select');
+    if (formatModeSelect) {
+      formatModeSelect.value = formatMode;
+      formatModeSelect.addEventListener('change', () => {
+        formatMode = formatModeSelect.value;
+      });
+    }
 
     const langSelect = document.getElementById('lang-select');
     if (langSelect) {
@@ -346,7 +381,8 @@ function renderTranscribePage(container) {
       transcribeBtn.addEventListener('click', startTranscription);
     }
 
-    document.querySelectorAll('.layout-tab[data-tab-id]').forEach(tab => {
+    // Transcript tabs
+    container.querySelectorAll('[data-tab-id]').forEach(tab => {
       tab.addEventListener('click', () => {
         activeTranscriptTab = tab.getAttribute('data-tab-id');
         render();
@@ -356,32 +392,37 @@ function renderTranscribePage(container) {
     const copyBtn = document.getElementById('btn-copy');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
+        if (!transcript) return;
         const textToCopy = activeTranscriptTab === 'timestamps' ? transcript.formatted : transcript.text;
-        Utils.copyToClipboard(textToCopy);
+        navigator.clipboard.writeText(textToCopy);
+        Utils.showToast('Copied to clipboard!');
       });
     }
 
     const downloadBtn = document.getElementById('btn-download');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => {
+        if (!transcript) return;
         const textToDownload = activeTranscriptTab === 'timestamps' ? transcript.formatted : transcript.text;
-        const name = selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript';
-        const suffix = activeTranscriptTab === 'timestamps' ? '_timestamps.txt' : '_plain.txt';
-        Utils.downloadText(textToDownload, name + suffix);
+        const blob = new Blob([textToDownload], { type: 'text/plain;charset=utf-8' });
+        const ext = activeTranscriptTab === 'timestamps' ? '_timestamps.txt' : '.txt';
+        Utils.downloadBlob(blob, selectedFile.name.replace(/\.[^/.]+$/, "") + ext);
       });
     }
   }
 
-  async function handleFile(file) {
-    const error = Utils.validateAudioFile(file);
-    if (error) {
-      Utils.showToast(error);
-      return;
-    }
+  function handleFile(file) {
     selectedFile = file;
     transcript = null;
-    fileDuration = await Utils.getAudioDuration(file);
+    liveTranscript = [];
     render();
+
+    const audio = document.createElement('audio');
+    audio.src = URL.createObjectURL(file);
+    audio.addEventListener('loadedmetadata', () => {
+      fileDuration = audio.duration;
+      render();
+    });
   }
 
   async function startTranscription() {
@@ -391,98 +432,72 @@ function renderTranscribePage(container) {
     transcript = null;
     liveTranscript = [];
     progressPct = 0;
-    statusMessage = 'Initializing Whisper AI...';
+    statusMessage = 'Preparing audio file...';
     render();
 
     try {
-      const whisper = window.WhisperTranscriber;
-
-      if (!whisper) {
-        throw new Error('WhisperTranscriber not found. Please refresh the page.');
-      }
-
-      const useOpenAI = !!(typeof AppState !== 'undefined' && AppState.openAiKey);
-
       const mode = modelSize === 'base' ? 'accuracy' : 'accuracy';
-
+      
       // Step 1: Load model if using local transcription
-      if (!useOpenAI) {
+      if (AppState.transcriptionMode === 'local') {
         const targetModel = whisper.models[mode] || whisper.models.fast;
         const modelSizeLabel = mode === 'accuracy' ? '~74MB' : '~40MB';
-
+        
         if (!whisper.isReady || whisper.currentLoadedModel !== targetModel) {
           updateProgress('Downloading Whisper AI model (' + modelSize + ')... First time only.', 0);
-
-          let lastFileProgress = {};
+          
           await whisper.loadModel(mode, (data) => {
-            if (data.status === 'progress' && data.file) {
-              lastFileProgress[data.file] = data.progress || 0;
-              const values = Object.values(lastFileProgress);
-              const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            if (data.status === 'progress') {
               updateProgress(
                 'Downloading model: ' + data.file.split('/').pop() + '...',
-                Math.min(avg * 0.5, 50)
+                Math.round(data.progress * 0.4)
               );
             } else if (data.status === 'ready') {
               updateProgress('Model loaded! Starting transcription...', 50);
             }
           });
         }
-
+        
         // Double-check the model actually loaded
         if (!whisper.isReady) {
           throw new Error('Model failed to load. Please refresh the page and try again.');
         }
       }
 
-      // Step 2: Transcribe
-      if (!useOpenAI) {
-        updateProgress('Transcribing audio with local Whisper AI (' + mode + ' mode)... This may take a minute.', 55);
-      }
+      updateProgress('Transcribing audio segments...', 60);
 
-      const result = await whisper.transcribe(selectedFile, language, mode, (msg, pct, liveChunk) => {
-        updateProgress(msg, pct, liveChunk);
+      // Call API
+      const result = await whisper.transcribe(selectedFile, language, (liveData) => {
+        updateProgress(null, null, liveData);
       });
 
-      updateProgress('Processing results...', 95);
+      progressPct = 100;
+      statusMessage = 'Transcription complete!';
 
-      // Step 3: Parse results
-      const chunks = result.chunks || [];
-      const fullText = result.text || '';
-      const wordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
-      const duration = fileDuration || 60;
-
-      // Format with timestamps
-      let formatted;
-      if (chunks.length > 0) {
-        formatted = chunks.map(chunk => {
-          const start = chunk.timestamp?.[0] ?? 0;
-          return '[' + Utils.formatTimestamp(start) + '] ' + chunk.text.trim();
-        }).join('\n');
-      } else {
-        formatted = '[0:00] ' + fullText;
-      }
-
+      const paragraphText = formatParagraphs(result.text);
       transcript = {
-        text: fullText,
-        formatted: formatted,
-        duration: duration,
-        wordCount: wordCount,
-        segmentCount: chunks.length || 1,
+        text: paragraphText,
+        formatted: result.chunks.map(c => `[${Utils.formatDuration(c.timestamp[0])} - ${Utils.formatDuration(c.timestamp[1])}] ${c.text.trim()}`).join('\n'),
+        duration: fileDuration,
+        wordCount: result.text.split(/\s+/).length,
+        segmentCount: result.chunks.length
       };
 
-      // Save to history
+      // Set default tab based on active format mode
+      activeTranscriptTab = formatMode === 'timestamps' ? 'timestamps' : 'plain';
+
+      // Add to history
       AppState.addHistory({
         name: selectedFile.name,
         mode: modelSize,
-        language: language,
-        duration: duration,
-        wordCount: wordCount,
+        language: language === 'auto' ? 'auto' : language,
+        duration: fileDuration,
+        wordCount: transcript.wordCount,
         segmentCount: transcript.segmentCount,
-        text: formatted,
+        text: formatMode === 'timestamps' ? transcript.formatted : transcript.text
       });
 
-      Utils.showToast('Transcription complete!');
+      Utils.showToast('Transcription completed!');
 
     } catch (err) {
       console.error('Transcription error:', err);
@@ -490,7 +505,6 @@ function renderTranscribePage(container) {
     }
 
     isTranscribing = false;
-    progressPct = 100;
     render();
   }
 

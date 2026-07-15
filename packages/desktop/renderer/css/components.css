@@ -1373,3 +1373,56 @@ input[type="range"]::-moz-range-thumb {
   justify-content: flex-end;
   margin-top: var(--sp-2);
 }
+
+/* ── Viewport Layout (No Page Scroll) ───────────────── */
+.page-container.no-scroll-layout {
+  height: calc(100vh - var(--topbar-h));
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-4) var(--sp-6) var(--sp-4);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 992px) {
+  .page-container.no-scroll-layout {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+.page-container.no-scroll-layout .split-layout {
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--sp-4);
+  height: 100%;
+  align-items: stretch;
+}
+
+.page-container.no-scroll-layout .layout-main,
+.page-container.no-scroll-layout .layout-sidebar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--sp-4);
+}
+
+.page-container.no-scroll-layout .layout-sidebar {
+  overflow-y: auto;
+}
+
+/* Transcribe page inner viewport scrolling */
+.page-container.no-scroll-layout .transcript-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-container.no-scroll-layout .transcript-body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}

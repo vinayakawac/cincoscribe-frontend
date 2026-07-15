@@ -72,14 +72,14 @@
             </li>
 
             <li>
-              <a class="nav-link" href="#/dashboard/text-to-voice" data-nav="dashboard/text-to-voice" title="Text to Voice">
+              <a class="nav-link" href="#/dashboard/text-to-voice" data-nav="dashboard/text-to-voice" title="Text to Speech">
                 <svg class="nav-link-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
                   <path d="M16 9a5 5 0 0 1 0 6"/>
                   <path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
                 </svg>
-                <span class="nav-link-label">Text to Voice</span>
+                <span class="nav-link-label">Text to Speech</span>
               </a>
             </li>
 
@@ -245,6 +245,27 @@
   <script src="js/pages/models.js?v=7"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // ── Topbar page title sync ───────────────────────────
+      const pageNames = {
+        'dashboard/transcribe': 'Transcribe',
+        'dashboard/text-to-voice': 'Text to Speech',
+        'dashboard/merge-audio': 'Merge Audio',
+        'dashboard/history': 'History',
+        'dashboard/settings': 'Settings',
+        'dashboard/upgrade': 'Upgrade Plan'
+      };
+
+      window.updateTopbarTitle = function (route) {
+        const el = document.getElementById('topbar-page-title');
+        if (el) {
+          el.innerHTML = `<span class="topbar-title-primary">${pageNames[route] || 'CincoScribe'}</span>`;
+        }
+        // Sync bottom tab bar active state
+        document.querySelectorAll('.tab-item').forEach(tab => {
+          tab.classList.toggle('active', tab.getAttribute('data-nav') === route);
+        });
+      };
+
       Sidebar.init();
       Router.init();
 
@@ -269,27 +290,6 @@
           AppState.save();
         });
       }
-
-      // ── Topbar page title sync ───────────────────────────
-      const pageNames = {
-        'dashboard/transcribe': 'Transcribe',
-        'dashboard/text-to-voice': 'Text to Voice',
-        'dashboard/merge-audio': 'Merge Audio',
-        'dashboard/history': 'History',
-        'dashboard/settings': 'Settings',
-        'dashboard/upgrade': 'Upgrade Plan'
-      };
-
-      window.updateTopbarTitle = function (route) {
-        const el = document.getElementById('topbar-page-title');
-        if (el) {
-          el.innerHTML = `<span class="topbar-title-primary">${pageNames[route] || 'CincoScribe'}</span>`;
-        }
-        // Sync bottom tab bar active state
-        document.querySelectorAll('.tab-item').forEach(tab => {
-          tab.classList.toggle('active', tab.getAttribute('data-nav') === route);
-        });
-      };
 
       // Wire bottom tab bar nav clicks through Router
       document.querySelectorAll('.tab-item[data-nav]').forEach(tab => {

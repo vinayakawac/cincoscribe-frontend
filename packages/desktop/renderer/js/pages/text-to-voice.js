@@ -1,17 +1,24 @@
-/* ===== Text to Voice Page ===== */
+/* ===== Text to Speech Page ===== */
 
 function renderTextToVoicePage(container) {
   let text = '';
-  let selectedVoice = 'Bruno';
+  let selectedVoice = 'Raunak M';
   let speed = 1.0;
-  let modelSize = 'nano'; // 'nano' | 'micro' | 'mini'
+  let modelSize = 'kokoro'; 
   let isGenerating = false;
   let progressPct = 0;
   let statusMessage = '';
   let generatedAudioBase64 = null;
   let generatedAudioDuration = 0;
+  let showVoiceGrid = false;
+
+  // Default fallback models
+  let downloadedModels = [
+    { id: 'kokoro', name: 'Kokoro 82M (Local)' }
+  ];
 
   const voices = [
+    { name: 'Raunak M', gender: 'Male', tag: 'Viral' },
     { name: 'Bella', gender: 'Female', tag: 'Clear' },
     { name: 'Jasper', gender: 'Male', tag: 'Warm' },
     { name: 'Luna', gender: 'Female', tag: 'Soft' },
@@ -22,20 +29,70 @@ function renderTextToVoicePage(container) {
     { name: 'Leo', gender: 'Male', tag: 'Friendly' }
   ];
 
+  async function fetchModelStatus() {
+    try {
+      let port = 3901;
+      if (window.electronAPI) {
+        port = await window.electronAPI.getSidecarPort();
+      }
+      const res = await fetch(`http://127.0.0.1:${port}/engines/models/status`);
+      if (res.ok) {
+        const data = await res.json();
+        const ttsModelsInfo = [
+          { id: 'kokoro', name: 'Kokoro 82M (Local)' },
+          { id: 'qwen_1_7b', name: 'Qwen TTS 1.7B' },
+          { id: 'qwen_0_6b', name: 'Qwen TTS 0.6B' },
+          { id: 'qwen_custom_1_7b', name: 'Qwen CustomVoice 1.7B' },
+          { id: 'qwen_custom_0_6b', name: 'Qwen CustomVoice 0.6B' },
+          { id: 'luxtts', name: 'LuxTTS (Fast)' },
+          { id: 'chatterbox_tts', name: 'Chatterbox TTS' },
+          { id: 'chatterbox_turbo', name: 'Chatterbox Turbo' },
+          { id: 'tada_1b', name: 'TADA 1B (English)' },
+          { id: 'tada_3b', name: 'TADA 3B Multilingual' }
+        ];
+        
+        const trueDownloaded = ttsModelsInfo.filter(m => data.tts[m.id] === true);
+        if (trueDownloaded.length > 0) {
+          downloadedModels = trueDownloaded;
+        }
+        
+        if (!downloadedModels.some(m => m.id === modelSize)) {
+          modelSize = downloadedModels[0].id;
+        }
+        render();
+      }
+    } catch (e) {
+      console.error('Failed to fetch model status', e);
+    }
+  }
+
   function render() {
     container.innerHTML = `
-      <div class="page-container">
-        ${renderHeader()}
+      <div class="page-container no-scroll-layout">
         <div class="split-layout">
           <div class="layout-main">
             ${renderTextInputZone()}
             ${isGenerating ? renderProgress() : ''}
-            ${generatedAudioBase64 ? renderAudioPlayer() : ''}
+            ${renderMainActionRow()}
           </div>
-          <div class="layout-sidebar">
-            ${renderSettingsGrid()}
-            ${renderVoiceGrid()}
-            ${renderActionRow()}
+          <div class="layout-sidebar" style="gap: var(--sp-5);">
+            <!-- Voice Preview Placeholder -->
+            ${renderVoicePreviewZone()}
+
+            <!-- Voice Selector -->
+            ${renderVoiceSelectorZone()}
+
+            <!-- Voice selection grid (shown only if expanded) -->
+            ${showVoiceGrid ? renderVoiceGrid() : ''}
+
+            <!-- Model Selector -->
+            ${renderModelSelectorZone()}
+
+            <!-- Speed control -->
+            ${renderSpeedControlZone()}
+
+            <!-- Generated Audio Player (shown at bottom of settings tab when ready) -->
+            ${renderAudioPlayerZone()}
           </div>
         </div>
       </div>
@@ -43,91 +100,59 @@ function renderTextToVoicePage(container) {
     bindEvents();
   }
 
-  function renderHeader() {
-    return `
-      <div class="page-header" style="margin-bottom: 0;">
-        <h1 class="page-title">Turn Text Into <span class="page-title-sub">Natural Voice</span></h1>
-        <p class="page-subtitle">Type or paste any text to generate high-quality voice output using KittenTTS</p>
-      </div>
-    `;
-  }
-
   function renderTextInputZone() {
     return `
-      <div class="card" style="display:flex; flex-direction:column; gap:var(--sp-3); border-color:var(--clr-border);">
+      <div style="display:flex; flex-direction:column; gap:var(--sp-2); flex: 1; min-height: 0;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <label class="form-label" style="margin-bottom:0;">Input Text</label>
+          <label class="form-label" style="margin-bottom:0; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; font-weight: 700; color: var(--clr-text-faint);">Input Text</label>
           ${text.trim() ? `<button class="btn-ghost" id="btn-clear-text" style="padding: 2px 8px; font-size: 11px;">Clear Text</button>` : ''}
         </div>
-        <div class="textarea-wrapper">
-          <textarea class="textarea" id="tts-text-input" placeholder="Type or paste your text here to convert it to speech..." maxlength="2000" style="min-height: 200px;">${escapeHtml(text)}</textarea>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:var(--fs-xs); color:var(--clr-text-faint);">
-          <span>Max 2,000 characters</span>
-          <span id="char-counter" class="badge badge-primary">${text.length} / 2,000</span>
+        <div class="textarea-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <textarea class="textarea" id="tts-text-input" placeholder="Type or paste your text here to convert it to speech..." maxlength="2000" style="flex: 1; min-height: 100px; height: 100%; resize: none; font-size: 14px; line-height: 1.6; border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-xl); padding: var(--sp-5);">${escapeHtml(text)}</textarea>
         </div>
       </div>
     `;
   }
 
-  function renderSettingsGrid() {
+  function renderVoicePreviewZone() {
     return `
-      <!-- Model Selection -->
-      <div class="settings-section-card">
-        <label class="settings-section-title">Voice Synthesis Engine</label>
-        <div class="option-card-grid">
-          <div class="option-card ${modelSize === 'nano' ? 'selected' : ''}" data-model-size="nano">
-            <div class="option-card-info">
-              <div class="option-card-title-row">
-                <span class="option-card-name">
-                  ${Utils.icons.bolt} KittenTTS Nano
-                </span>
-                <span class="option-card-badge">~25MB</span>
-              </div>
-              <p class="option-card-desc">15M params. Ultra-fast voice synthesis.</p>
-            </div>
-            <div class="mode-radio"></div>
-          </div>
-          
-          <div class="option-card ${modelSize === 'micro' ? 'selected' : ''}" data-model-size="micro">
-            <div class="option-card-info">
-              <div class="option-card-title-row">
-                <span class="option-card-name">
-                  ${Utils.icons.target} KittenTTS Micro
-                </span>
-                <span class="option-card-badge">~65MB</span>
-              </div>
-              <p class="option-card-desc">40M params. Balanced speed and quality.</p>
-            </div>
-            <div class="mode-radio"></div>
-          </div>
-
-          <div class="option-card ${modelSize === 'mini' ? 'selected' : ''}" data-model-size="mini">
-            <div class="option-card-info">
-              <div class="option-card-title-row">
-                <span class="option-card-name">
-                  ${Utils.icons.sparkles} KittenTTS Mini
-                </span>
-                <span class="option-card-badge">~130MB</span>
-              </div>
-              <p class="option-card-desc">80M params. Highest speech naturalness.</p>
-            </div>
-            <div class="mode-radio"></div>
-          </div>
+      <div style="padding: 12px 16px; border: none; border-radius: var(--radius-lg); display: flex; align-items: center; gap: 12px; background: var(--clr-bg-subtle); color: var(--clr-text-muted); font-size: 11px;">
+        <button class="btn-icon-sm" id="btn-play-voice-preview" title="Play voice preview" style="background: var(--clr-primary); color: black; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </button>
+        <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+          <span style="font-weight: 600; color: var(--clr-text); font-size: 12px;">Voice Sample Preview</span>
+          <span style="color: var(--clr-text-faint); font-size: 10px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Click to preview: ${selectedVoice}</span>
         </div>
       </div>
+    `;
+  }
 
-      <!-- Speed control -->
-      <div class="settings-section-card">
-        <label class="settings-section-title">Speech Speed: <span id="speed-val" style="color:var(--clr-primary-text); font-family:var(--ff-display); font-weight:var(--fw-bold);">${speed.toFixed(1)}x</span></label>
-        <div style="display:flex; align-items:center; gap:var(--sp-3); padding: var(--sp-2) 0;">
-          <span style="font-size:var(--fs-xs); color:var(--clr-text-faint); font-family:var(--ff-display);">0.5x</span>
-          <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="${speed}" style="flex:1; accent-color:var(--clr-primary);">
-          <span style="font-size:var(--fs-xs); color:var(--clr-text-faint); font-family:var(--ff-display);">2.0x</span>
-        </div>
-        <div class="info-strip" style="margin: 0; padding: 10px 12px; background: var(--clr-primary-subtle); border-color: var(--clr-border);">
-          <span class="info-strip-icon">${Utils.icons.info}</span>
-          <span style="font-size: 11px;">Adjusts how fast the output is spoken.</span>
+  function renderVoiceSelectorZone() {
+    const voiceDescMap = {
+      'Raunak M': 'Viral & Relatable Reel Voice',
+      'Bella': 'Clear & Professional Voice',
+      'Jasper': 'Warm & Natural Narration Voice',
+      'Luna': 'Soft & Peaceful Audiobook Voice',
+      'Bruno': 'Deep & Engaging Podcast Voice',
+      'Rosie': 'Expressive & Energetic Ad Voice',
+      'Hugo': 'Formal & Clear Presentation Voice',
+      'Kiki': 'Energetic & Fun Character Voice',
+      'Leo': 'Friendly & Welcoming Assistant Voice'
+    };
+    const desc = voiceDescMap[selectedVoice] || 'Natural Speech Voice';
+    
+    return `
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Voice</label>
+        <div class="voice-select-card" id="btn-select-voice" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); transition: background var(--dur-fast);">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; width: 90%;">
+            <div class="voice-avatar" style="width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--clr-primary) 0%, oklch(0.6 0.15 30) 100%); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: black; flex-shrink: 0;">
+              ${selectedVoice.charAt(0)}
+            </div>
+            <span style="font-size: 13px; font-weight: 500; color: var(--clr-text); text-overflow: ellipsis; overflow: hidden;">${selectedVoice} - ${desc}</span>
+          </div>
+          <span style="color: var(--clr-text-muted); font-size: 12px; margin-left: 6px; transform: ${showVoiceGrid ? 'rotate(90deg)' : 'none'}; transition: transform var(--dur-fast);">&gt;</span>
         </div>
       </div>
     `;
@@ -135,18 +160,17 @@ function renderTextToVoicePage(container) {
 
   function renderVoiceGrid() {
     return `
-      <div class="settings-section-card">
-        <label class="settings-section-title">Voice Profile</label>
-        <div class="voice-grid" style="grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--sp-2);">
+      <div class="settings-section-card" style="padding: 10px; border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-lg); margin-top: -8px;">
+        <div class="voice-grid" style="grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--sp-2); max-height: 160px; overflow-y: auto;">
           ${voices.map(voice => `
-            <div class="voice-card ${selectedVoice === voice.name ? 'selected' : ''}" data-voice-name="${voice.name}" style="padding: 10px; gap: var(--sp-2); border-radius: var(--radius-lg);">
+            <div class="voice-card ${selectedVoice === voice.name ? 'selected' : ''}" data-voice-name="${voice.name}" style="padding: 8px; gap: 4px; border-radius: var(--radius-md); border: none;">
               <div style="display:flex; align-items:center; justify-content:space-between;">
-                <div class="voice-card-name" style="font-size: 13px;">${voice.name}</div>
-                <div class="mode-radio" style="width: 14px; height: 14px; border-width: 1.5px;"></div>
+                <div class="voice-card-name" style="font-size: 12px; font-weight: 600;">${voice.name}</div>
+                <div class="mode-radio" style="width: 12px; height: 12px; border-width: 1.5px;"></div>
               </div>
-              <div style="display:flex; align-items:center; justify-content:space-between; font-size: 10px; color: var(--clr-text-faint);">
+              <div style="display:flex; align-items:center; justify-content:space-between; font-size: 9px; color: var(--clr-text-faint);">
                 <span>${voice.gender}</span>
-                <span class="voice-tag" style="font-size: 8px; padding: 1px 4px; margin:0;">${voice.tag}</span>
+                <span class="voice-tag" style="font-size: 8px; padding: 1px 3px; margin:0;">${voice.tag}</span>
               </div>
             </div>
           `).join('')}
@@ -155,12 +179,80 @@ function renderTextToVoicePage(container) {
     `;
   }
 
-  function renderActionRow() {
+  function renderModelSelectorZone() {
+    return `
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Model</label>
+        
+        <div style="position: relative; width: 100%;">
+          <select id="select-model" style="width: 100%; padding: 12px 16px; font-size: 13px; font-weight: 500; color: var(--clr-text); border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); outline: none; appearance: none; cursor: pointer;">
+            ${downloadedModels.map(m => `
+              <option value="${m.id}" ${modelSize === m.id ? 'selected' : ''}>${m.name}</option>
+            `).join('')}
+          </select>
+          <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--clr-text-muted); font-size: 10px;">
+            ▼
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSpeedControlZone() {
+    return `
+      <div class="settings-section-card" style="border: none; background: transparent; padding: 0; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label class="settings-section-title" style="margin-bottom: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--clr-text-faint);">Speed</label>
+          <span id="speed-val" style="font-size: 12px; font-weight: bold; color: var(--clr-primary);">${speed.toFixed(1)}x</span>
+        </div>
+        <div style="padding: 12px 16px; border: none; border-radius: var(--radius-lg); background: var(--clr-bg-subtle); display: flex; align-items: center; min-height: 48px;">
+          <input type="range" min="0.5" max="2.0" step="0.1" value="${speed}" id="speed-slider" style="width: 100%; accent-color: var(--clr-primary); cursor: pointer;">
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAudioPlayerZone() {
+    if (!generatedAudioBase64) return '';
+
+    return `
+      <div class="audio-player-wrap" style="border: none; padding: 14px 18px; background: var(--clr-bg-subtle); border-radius: var(--radius-lg); width: 100%;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+          <div class="transcript-title" style="margin:0; font-size: var(--fs-xs);">Generated Speech</div>
+          <button class="btn-ghost" id="btn-download-speech" style="font-size: 11px;">
+            ${Utils.icons.download} Download
+          </button>
+        </div>
+        <audio id="tts-audio-player" style="display: none;"></audio>
+        
+        <!-- Custom Audio Player Controller -->
+        <div class="custom-player" style="display: flex; align-items: center; gap: var(--sp-3);">
+          <button class="player-btn" id="custom-play-pause-btn" style="width: 32px; height: 32px; border-radius: 50%; background: var(--clr-primary); color: black; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;">
+            ${Utils.icons.play}
+          </button>
+          
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <!-- Progress Slider Track -->
+            <div class="player-slider" id="player-slider" style="height: 4px; background: var(--clr-border-med); border-radius: var(--radius-full); cursor: pointer; position: relative;">
+              <div class="player-progress" id="player-progress" style="width: 0%; height: 100%; background: var(--clr-primary); border-radius: var(--radius-full);"></div>
+            </div>
+            <!-- Timestamps -->
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--clr-text-faint);">
+              <span id="player-time-current">0:00</span>
+              <span id="player-time-duration">${Utils.formatTimestamp(generatedAudioDuration)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMainActionRow() {
     const disabled = !text.trim() || isGenerating;
     return `
-      <div class="settings-section-card">
-        <button class="btn btn-primary" id="btn-generate-speech" ${disabled ? 'disabled' : ''} style="width:100%;">
-          Generate Voice
+      <div style="display:flex; align-items:center; justify-content:flex-end; margin-top:var(--sp-2);">
+        <button class="btn btn-primary" id="btn-generate-speech" ${disabled ? 'disabled' : ''} style="background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 10px 24px; font-size: 13px;">
+          ${isGenerating ? 'Generating speech...' : 'Generate speech'}
         </button>
       </div>
     `;
@@ -168,8 +260,8 @@ function renderTextToVoicePage(container) {
 
   function renderProgress() {
     return `
-      <div class="transcript-panel">
-        <div class="progress-container">
+      <div class="transcript-panel" style="margin-top: 10px; border: none; padding: 0; background: transparent; width: 100%;">
+        <div class="progress-container" id="progress-area" style="padding: 0;">
           <div class="progress-bar-wrapper">
             <div class="progress-bar-fill" id="progress-bar" style="width:${progressPct}%"></div>
           </div>
@@ -180,44 +272,10 @@ function renderTextToVoicePage(container) {
     `;
   }
 
-  function renderAudioPlayer() {
-    return `
-      <div class="audio-player-wrap" style="border-color: var(--clr-border);">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="transcript-title" style="margin:0; font-size: var(--fs-sm);">Generated Speech Output</div>
-          <div class="transcript-actions">
-            <button class="btn-ghost" id="btn-download-speech">${Utils.icons.download} Download .wav</button>
-          </div>
-        </div>
-        
-        <!-- Hidden real audio element -->
-        <audio id="tts-audio-player" src="data:audio/wav;base64,${generatedAudioBase64}" style="display:none;"></audio>
-        
-        <!-- Custom styled controls -->
-        <div class="custom-audio-player">
-          <button class="custom-player-btn" id="custom-play-pause-btn">
-            ${Utils.icons.play}
-          </button>
-          <div class="custom-player-timeline">
-            <span class="custom-player-time" id="player-time-current">0:00</span>
-            <div class="custom-player-slider" id="player-slider">
-              <div class="custom-player-progress" id="player-progress"></div>
-            </div>
-            <span class="custom-player-time" id="player-time-duration">0:00</span>
-          </div>
-        </div>
-
-        <div class="transcript-stats" style="border:none; background:none; padding:0; margin-top:0; font-size:11px;">
-          <span><span class="stat-label">Voice Profile </span><span class="stat-value">${selectedVoice}</span></span>
-          <span><span class="stat-label">Speed </span><span class="stat-value">${speed.toFixed(1)}x</span></span>
-        </div>
-      </div>
-    `;
-  }
-
   function updateProgress(msg, pct) {
-    statusMessage = msg;
-    progressPct = pct;
+    if (msg !== null) statusMessage = msg;
+    if (pct !== null && pct !== undefined) progressPct = pct;
+
     const bar = document.getElementById('progress-bar');
     const status = document.getElementById('progress-status');
     const pctEl = document.getElementById('progress-pct');
@@ -237,10 +295,6 @@ function renderTextToVoicePage(container) {
     if (textInput) {
       textInput.addEventListener('input', () => {
         text = textInput.value;
-        const charCounter = document.getElementById('char-counter');
-        if (charCounter) {
-          charCounter.textContent = `${text.length} / 2,000`;
-        }
         const generateBtn = document.getElementById('btn-generate-speech');
         if (generateBtn) {
           generateBtn.disabled = !text.trim() || isGenerating;
@@ -256,12 +310,54 @@ function renderTextToVoicePage(container) {
       });
     }
 
-    document.querySelectorAll('[data-model-size]').forEach(card => {
+    // Voice Selector toggle
+    const selectVoiceBtn = document.getElementById('btn-select-voice');
+    if (selectVoiceBtn) {
+      selectVoiceBtn.addEventListener('click', () => {
+        showVoiceGrid = !showVoiceGrid;
+        render();
+      });
+    }
+
+    // Voice Selector card click
+    container.querySelectorAll('[data-voice-name]').forEach(card => {
       card.addEventListener('click', () => {
-        modelSize = card.getAttribute('data-model-size');
+        selectedVoice = card.getAttribute('data-voice-name');
+        showVoiceGrid = false;
         render();
       });
     });
+
+    // Model Selector dropdown selection
+    const modelSelectEl = document.getElementById('select-model');
+    if (modelSelectEl) {
+      modelSelectEl.addEventListener('change', () => {
+        modelSize = modelSelectEl.value;
+        render();
+      });
+    }
+
+    // Voice preview play click
+    const previewPlayBtn = document.getElementById('btn-play-voice-preview');
+    if (previewPlayBtn) {
+      previewPlayBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        Utils.showToast(`Playing sample preview for ${selectedVoice}...`);
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } catch(e) {
+          console.error(e);
+        }
+      });
+    }
 
     const speedSlider = document.getElementById('speed-slider');
     if (speedSlider) {
@@ -271,13 +367,6 @@ function renderTextToVoicePage(container) {
         if (speedVal) speedVal.textContent = `${speed.toFixed(1)}x`;
       });
     }
-
-    document.querySelectorAll('[data-voice-name]').forEach(card => {
-      card.addEventListener('click', () => {
-        selectedVoice = card.getAttribute('data-voice-name');
-        render();
-      });
-    });
 
     const generateBtn = document.getElementById('btn-generate-speech');
     if (generateBtn) {
@@ -308,6 +397,9 @@ function renderTextToVoicePage(container) {
     const playerSlider = document.getElementById('player-slider');
 
     if (realAudio && playPauseBtn) {
+      // Set audio source to generated speech
+      realAudio.src = `data:audio/wav;base64,${generatedAudioBase64}`;
+
       playPauseBtn.addEventListener('click', () => {
         if (realAudio.paused) {
           realAudio.play();
@@ -365,20 +457,12 @@ function renderTextToVoicePage(container) {
     try {
       updateProgress('Loading voice model and synthesis pipeline...', 25);
 
-      // Call sidecar via preload API
-      if (!window.cincoscribe) throw new Error("Sidecar API not found");
-      const wavBytes = await window.cincoscribe.tts(text.trim(), selectedVoice);
-      const base64Audio = btoa(
-        new Uint8Array(wavBytes).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-
-      // Build a response object matching the old shape so the rest of the handler works
-      const response = {
-        success: true,
-        audioData: base64Audio,
-        duration: null,     // sidecar doesn't return duration in this version
-        word_count: text.trim().split(/\s+/).length,
-      };
+      const response = await window.electronAPI.generateSpeech({
+        text: text.trim(),
+        voice: selectedVoice,
+        speed: speed,
+        modelSize: modelSize
+      });
 
       if (response && response.success && response.audioData) {
         updateProgress('Processing synthesized audio...', 90);
@@ -412,6 +496,7 @@ function renderTextToVoicePage(container) {
     render();
   }
 
+  fetchModelStatus();
   render();
 }
 
