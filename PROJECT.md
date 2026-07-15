@@ -64,7 +64,7 @@ The primary Electron app distribution package.
 
 The root folder contains a complete vanilla JS single-page web app.
 - **`index.html`**: Root viewport loading CSS tokens and routing scripts.
-- **`landing.html`**: Static landing/marketing page. Displays app features, FAQs, specifications, and plans.
+- **`landing/index.html`**: Static landing/marketing page. Displays app features, FAQs, specifications, and plans.
 - **`css/`**: Styling modules:
   - `variables.css`: Defines structural tokens and color palettes.
   - `base.css`: Base layouts and app shell.
