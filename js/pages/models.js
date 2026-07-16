@@ -29,7 +29,8 @@ function renderModelsPage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      const res = await fetch(`http://127.0.0.1:${port}/engines/models/status`);
+      const hostname = window.location.hostname || 'localhost';
+      const res = await fetch(`http://${hostname}:${port}/engines/models/status`);
       if (res.ok) {
         const data = await res.json();
         modelStatus = data;
@@ -97,7 +98,8 @@ function renderModelsPage(container) {
           if (window.electronAPI) {
             port = await window.electronAPI.getSidecarPort();
           }
-          const res = await fetch(`http://127.0.0.1:${port}/health`);
+          const hostname = window.location.hostname || 'localhost';
+          const res = await fetch(`http://${hostname}:${port}/health`);
           if (res.ok) {
             stopOfflineReconnectPolling();
             await fetchStatus();
@@ -136,7 +138,8 @@ function renderModelsPage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      const res = await fetch(`http://127.0.0.1:${port}/engines/models/download`, {
+      const hostname = window.location.hostname || 'localhost';
+      const res = await fetch(`http://${hostname}:${port}/engines/models/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model_type: modelType, model_name: modelName })
@@ -509,7 +512,8 @@ function renderModelsPage(container) {
             if (window.electronAPI) {
               port = await window.electronAPI.getSidecarPort();
             }
-            const res = await fetch(`http://127.0.0.1:${port}/engines/models/delete`, {
+            const hostname = window.location.hostname || 'localhost';
+            const res = await fetch(`http://${hostname}:${port}/engines/models/delete`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ model_type: type, model_name: name })

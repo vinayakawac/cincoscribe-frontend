@@ -35,7 +35,8 @@ function renderTextToVoicePage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      const res = await fetch(`http://127.0.0.1:${port}/engines/models/status`);
+      const hostname = window.location.hostname || 'localhost';
+      const res = await fetch(`http://${hostname}:${port}/engines/models/status`);
       if (res.ok) {
         const data = await res.json();
         const ttsModelsInfo = [
@@ -469,7 +470,8 @@ function renderTextToVoicePage(container) {
           port = await window.electronAPI.getSidecarPort();
         }
         
-        const res = await fetch(`http://127.0.0.1:${port}/tts`, {
+        const hostname = window.location.hostname || 'localhost';
+        const res = await fetch(`http://${hostname}:${port}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

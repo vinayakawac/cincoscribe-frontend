@@ -33,7 +33,8 @@ async function renderSettingsPage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      const res = await fetch(`http://127.0.0.1:${port}/health`);
+      const hostname = window.location.hostname || 'localhost';
+      const res = await fetch(`http://${hostname}:${port}/health`);
       isServerOnline = res.ok;
     } catch (e) {
       isServerOnline = false;
@@ -60,7 +61,8 @@ async function renderSettingsPage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      const res = await fetch(`http://127.0.0.1:${port}/logs`);
+      const hostname = window.location.hostname || 'localhost';
+      const res = await fetch(`http://${hostname}:${port}/logs`);
       if (res.ok) {
         const data = await res.json();
         logsText = data.logs.join('\n') || 'No logs recorded.';
@@ -86,7 +88,8 @@ async function renderSettingsPage(container) {
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
-      await fetch(`http://127.0.0.1:${port}/logs/clear`, { method: 'POST' });
+      const hostname = window.location.hostname || 'localhost';
+      await fetch(`http://${hostname}:${port}/logs/clear`, { method: 'POST' });
       logsText = 'Logs cleared.';
       const logsEl = document.getElementById('terminal-logs');
       if (logsEl) logsEl.value = '';
@@ -245,7 +248,7 @@ async function renderSettingsPage(container) {
             <input
               id="settings-server-url"
               type="text"
-              value="http://127.0.0.1:3901"
+              value="http://${window.location.hostname || 'localhost'}:3901"
               disabled
               style="width: 100%; padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text-muted); border-radius: var(--radius); font-size: 12px; font-family: var(--ff-mono);"
             />
