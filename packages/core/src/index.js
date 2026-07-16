@@ -64,7 +64,7 @@
 // ── Sidecar API contract ──────────────────────────────────────────────────────
 
 /** Port the FastAPI sidecar listens on */
-const SIDECAR_PORT = 3901;
+const SIDECAR_PORT = 5555;
 
 /** Base URL for sidecar HTTP calls */
 const SIDECAR_BASE = `http://127.0.0.1:${SIDECAR_PORT}`;

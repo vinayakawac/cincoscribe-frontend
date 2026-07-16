@@ -250,7 +250,7 @@ function renderMergeAudioPage(container) {
         response = await window.electronAPI.mergeAudio({ files: fileDataList });
       } else {
         // Fallback to fetch from Python sidecar
-        let port = 3901;
+        let port = 5555;
         if (window.electronAPI) {
           port = await window.electronAPI.getSidecarPort();
         const hostname = window.location.hostname || 'localhost';

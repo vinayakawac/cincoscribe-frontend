@@ -20,7 +20,7 @@ function renderTranscribePage(container) {
 
   async function fetchModelStatus() {
     try {
-      let port = 3901;
+      let port = 5555;
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }

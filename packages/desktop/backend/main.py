@@ -100,7 +100,7 @@ def clear_logs():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("SIDECAR_PORT", "3901"))
+    port = int(os.environ.get("SIDECAR_PORT", "5555"))
     logger.info(f"CincoScribe sidecar starting on 127.0.0.1:{port}")
     uvicorn.run(
         app,

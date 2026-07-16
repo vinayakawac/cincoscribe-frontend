@@ -31,7 +31,7 @@ function renderTextToVoicePage(container) {
 
   async function fetchModelStatus() {
     try {
-      let port = 3901;
+      let port = 5555;
       if (window.electronAPI) {
         port = await window.electronAPI.getSidecarPort();
       }
@@ -465,7 +465,7 @@ function renderTextToVoicePage(container) {
         });
       } else {
         // Fallback to sidecar API directly over HTTP
-        let port = 3901;
+        let port = 5555;
         if (window.electronAPI) {
           port = await window.electronAPI.getSidecarPort();
         }
