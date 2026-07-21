@@ -29,7 +29,16 @@ class SherpaTTS(TTSBackend):
             snapshot_download(
                 repo_id="csukuangfj/kokoro-en-v0_19",
                 local_dir=str(self.model_path),
-                allow_patterns=["*.onnx", "*.txt", "espeak-ng-data/*"]
+                allow_patterns=["*.onnx", "*.bin", "*.txt", "espeak-ng-data/*"]
+            )
+
+        if not (self.model_path / "voices.bin").exists():
+            logger.info(f"Downloading Kokoro voices.bin to {self.model_path}...")
+            from huggingface_hub import hf_hub_download
+            hf_hub_download(
+                repo_id="csukuangfj/kokoro-en-v0_19",
+                filename="voices.bin",
+                local_dir=str(self.model_path)
             )
 
         # Check ONNX Runtime GPU support
@@ -43,13 +52,22 @@ class SherpaTTS(TTSBackend):
 
         import sherpa_onnx
         logger.info(f"Initializing SherpaTTS with provider={provider}")
+
+        voices_path = str(self.model_path / "voices.bin")
+        dict_dir = str(self.model_path / "dict") if (self.model_path / "dict").exists() else ""
+        lexicon_path = str(self.model_path / "lexicon-us-en.txt") if (self.model_path / "lexicon-us-en.txt").exists() else ""
+
+        kokoro_config = sherpa_onnx.OfflineTtsKokoroModelConfig(
+            model=str(self.model_path / "model.onnx"),
+            voices=voices_path,
+            tokens=str(self.model_path / "tokens.txt"),
+            data_dir=str(self.model_path / "espeak-ng-data"),
+            lexicon=lexicon_path,
+            dict_dir=dict_dir,
+        )
+
         model_config = sherpa_onnx.OfflineTtsModelConfig(
-            vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                model=str(self.model_path / "model.onnx"),
-                lexicon=str(self.model_path / "lexicon-us-en.txt"),
-                tokens=str(self.model_path / "tokens.txt"),
-                data_dir=str(self.model_path / "espeak-ng-data"),
-            ),
+            kokoro=kokoro_config,
             provider=provider,
             num_threads=2,
             debug=False,
