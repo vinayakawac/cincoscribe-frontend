@@ -21,6 +21,7 @@ async function build() {
     'preload.js',
     'index.html',
     'cincoscribe.svg',
+    'cincoscribe.png',
     'activation.html',
     'invalid.html',
     'offline-expired.html',

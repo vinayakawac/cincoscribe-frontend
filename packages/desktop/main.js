@@ -45,7 +45,7 @@ function createMainWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    icon: path.join(__dirname, 'renderer', 'cincoscribe.svg'),
+    icon: path.join(__dirname, 'renderer', 'cincoscribe.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -100,13 +100,24 @@ function spawnSidecar() {
   const backendDir = path.join(__dirname, 'backend');
   const serverScript = path.join(backendDir, 'main.py');
 
-  // uv run ensures the venv defined by pyproject.toml is used.
-  // Fallback: py main.py if uv is unavailable (dev convenience).
-  const [cmd, args] = process.platform === 'win32'
-    ? ['uv', ['run', serverScript]]
-    : ['uv', ['run', serverScript]];
+  const currentModelsDir = store.get('modelsDir') || path.join(__dirname, '..', '..', '.models');
+  const cudaDir = path.join(currentModelsDir, '..', 'backends', 'cuda');
+  const cudaBinaryName = process.platform === 'win32' ? 'cincoscribe-server.exe' : 'cincoscribe-server';
+  const cudaBinary = path.join(cudaDir, cudaBinaryName);
 
-  log.info(`[sidecar] Spawning: ${cmd} ${args.join(' ')}`);
+  const requestedVariant = (store.get('backendVariant') || 'cpu').toLowerCase();
+  const useCuda = requestedVariant === 'cuda' && fs.existsSync(cudaBinary);
+
+  let cmd, args;
+  if (useCuda) {
+    cmd = cudaBinary;
+    args = [];
+  } else {
+    cmd = 'uv';
+    args = ['run', serverScript];
+  }
+
+  log.info(`[sidecar] Spawning (${useCuda ? 'CUDA' : 'CPU'}): ${cmd} ${args.join(' ')}`);
 
   sidecarProcess = spawn(cmd, args, {
     cwd: backendDir,
@@ -116,8 +127,9 @@ function spawnSidecar() {
     env: {
       ...process.env,
       SIDECAR_PORT: String(SIDECAR_PORT),
-      CINCOSCRIBE_MODELS_DIR: store.get('modelsDir') || '',
-      VOICEBOX_MODELS_DIR: store.get('modelsDir') || '',   // legacy compat
+      CINCOSCRIBE_MODELS_DIR: currentModelsDir,
+      VOICEBOX_MODELS_DIR: currentModelsDir,
+      CINCOSCRIBE_BACKEND_VARIANT: useCuda ? 'cuda' : 'cpu',
       SIDECAR_TOKEN: SIDECAR_TOKEN
     }
   });
@@ -305,6 +317,15 @@ ipcMain.handle('save-file-dialog', async (_event, opts) => {
   });
   return result;
 });
+ipcMain.handle('set-backend-variant', async (_event, variant) => {
+  log.info(`[main] Switching sidecar backend variant to: ${variant}`);
+  store.set('backendVariant', variant);
+  killSidecar();
+  await new Promise(r => setTimeout(r, 1000));
+  spawnSidecar();
+  return { success: true };
+});
+
 ipcMain.handle('restart-sidecar', async (_event, newModelsDir) => {
   log.info(`[main] Updating sidecar models path: ${newModelsDir}`);
   store.set('modelsDir', newModelsDir);

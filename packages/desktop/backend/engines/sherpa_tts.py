@@ -42,13 +42,17 @@ class SherpaTTS(TTSBackend):
             )
 
         # Check ONNX Runtime GPU support
-        provider = "cpu"
-        try:
-            import torch
-            if torch.cuda.is_available():
-                provider = "cuda"
-        except ImportError:
-            pass
+        from services.cuda_backend import is_cuda_active
+        provider = "cuda" if is_cuda_active() else "cpu"
+        if provider == "cpu":
+            import importlib
+            if importlib.util.find_spec("torch") is not None:
+                try:
+                    torch = importlib.import_module("torch")
+                    if getattr(torch.cuda, "is_available", lambda: False)():
+                        provider = "cuda"
+                except Exception:
+                    pass
 
         import sherpa_onnx
         logger.info(f"Initializing SherpaTTS with provider={provider}")

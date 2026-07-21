@@ -26,7 +26,43 @@ async function renderSettingsPage(container) {
   let logsInterval = null;
   let logsText = 'Loading logs...';
 
+  let cudaStatus = null;
+  let cudaPollInterval = null;
 
+  function stopCudaPolling() {
+    if (cudaPollInterval) {
+      clearInterval(cudaPollInterval);
+      cudaPollInterval = null;
+    }
+  }
+
+  async function fetchCudaStatus() {
+    try {
+      let port = 5555;
+      if (window.electronAPI) port = await window.electronAPI.getSidecarPort();
+      const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '127.0.0.1' : (window.location.hostname || 'localhost');
+      let token = '';
+      if (window.electronAPI && window.electronAPI.getSidecarToken) {
+        try { token = await window.electronAPI.getSidecarToken(); } catch (e) {}
+      }
+      const headers = token ? { 'X-Sidecar-Token': token } : {};
+      const res = await fetch(`http://${hostname}:${port}/system/cuda-status`, { headers });
+      if (res.ok) {
+        cudaStatus = await res.json();
+        if (cudaStatus.downloading && !cudaPollInterval) {
+          cudaPollInterval = setInterval(async () => {
+            await fetchCudaStatus();
+            render();
+          }, 800);
+        } else if (!cudaStatus.downloading && cudaPollInterval) {
+          stopCudaPolling();
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch CUDA status:', e);
+      stopCudaPolling();
+    }
+  }
 
   // Check server health with fast timeout
   async function checkServerHealth() {
@@ -106,8 +142,6 @@ async function renderSettingsPage(container) {
     }
   }
 
-
-
   function init() {
     // Render UI IMMEDIATELY so page load is 0ms instant
     render();
@@ -118,6 +152,7 @@ async function renderSettingsPage(container) {
   function render() {
     if (!document.body.contains(container)) {
       stopLogsPolling();
+      stopCudaPolling();
       return;
     }
 
@@ -128,14 +163,16 @@ async function renderSettingsPage(container) {
       stopLogsPolling();
     }
 
+    if (activeTab !== 'gpu') {
+      stopCudaPolling();
+    }
+
     const tabs = [
       { id: 'general', label: 'General' },
       { id: 'gpu', label: 'GPU' },
       { id: 'logs', label: 'Logs' },
       { id: 'about', label: 'About' }
     ];
-
-
 
     container.innerHTML = `
       <style>
@@ -325,8 +362,6 @@ async function renderSettingsPage(container) {
           </select>
         </div>
 
-
-
         <!-- Footer Action -->
         <div style="display: flex; justify-content: flex-end; margin-top: var(--sp-6);">
           <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
@@ -334,19 +369,74 @@ async function renderSettingsPage(container) {
         </div>
       `;
     } else if (activeTab === 'gpu') {
+      const isAvailable = cudaStatus?.available;
+      const isActive = cudaStatus?.active;
+      const isDownloading = cudaStatus?.downloading;
+      const progress = cudaStatus?.download_progress || {};
+      const isSupported = cudaStatus?.download_supported !== false;
+      const reason = cudaStatus?.unsupported_reason || '';
+      const lastStatus = progress.status || '';
+      const hasFailed = !isDownloading && lastStatus.startsWith('Failed:');
+
       return `
-        <div style="text-align: center; padding: var(--sp-8) 0; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4);">
-          <div style="font-size: 48px; color: var(--clr-text-muted); margin-bottom: 8px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-              <line x1="6" y1="6" x2="6.01" y2="6"/>
-              <line x1="6" y1="18" x2="6.01" y2="18"/>
-            </svg>
-          </div>
+        <div style="padding: var(--sp-4) 0; display: flex; flex-direction: column; gap: var(--sp-5);">
           <div>
-            <h3 style="font-family: var(--ff-display); font-size: 18px; font-weight: 700; color: var(--clr-text); margin: 0;">GPU Acceleration</h3>
-            <p style="font-size: 13px; color: var(--clr-text-muted); margin: 6px 0 0 0;">Inference is automatically accelerated via CUDA if matching hardware is detected.</p>
+            <h3 style="font-family: var(--ff-display); font-size: 18px; font-weight: 700; color: var(--clr-text); margin: 0;">GPU Acceleration (CUDA)</h3>
+            <p style="font-size: 13px; color: var(--clr-text-muted); margin: 6px 0 0 0;">Opt-in CUDA acceleration for faster-whisper and sherpa-onnx TTS.</p>
+          </div>
+
+          <div style="background: var(--clr-bg-subtle); border: 1px solid var(--clr-border); border-radius: var(--radius-lg); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--clr-text);">Active Backend Variant</h4>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--clr-text-muted);">
+                  Currently running: <strong style="color: var(--clr-primary);">${isActive ? 'CUDA (GPU)' : 'CPU'}</strong>
+                </p>
+              </div>
+              ${isAvailable ? `
+                <button id="btn-toggle-cuda" class="btn ${isActive ? 'btn-secondary' : 'btn-primary'}" style="font-size: 13px;">
+                  ${isActive ? 'Switch to CPU' : 'Enable CUDA'}
+                </button>
+              ` : ''}
+            </div>
+
+            ${!isSupported ? `
+              <div style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 12px; font-size: 12px; color: #ef4444;">
+                ${escapeHtml(reason)}
+              </div>
+            ` : ''}
+
+            ${hasFailed ? `
+              <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius); padding: 12px; font-size: 12px; color: #ef4444; display: flex; align-items: flex-start; gap: 8px;">
+                <span style="flex-shrink: 0; font-size: 14px;">✕</span>
+                <span>${escapeHtml(lastStatus.replace('Failed: ', ''))}</span>
+              </div>
+            ` : ''}
+
+            ${isDownloading ? `
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--clr-text-muted);">
+                  <span>${escapeHtml(lastStatus || 'Downloading...')}</span>
+                  <span>${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: var(--clr-bg); border-radius: 3px; overflow: hidden;">
+                  <div style="height: 100%; width: ${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%; background: var(--clr-primary); transition: width 200ms ease;"></div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div style="display: flex; gap: var(--sp-3); margin-top: 8px;">
+              ${isSupported && !isAvailable && !isDownloading ? `
+                <button id="btn-download-cuda" class="btn btn-primary" style="font-size: 13px;">
+                  ${hasFailed ? 'Retry Download' : 'Download GPU Backend'}
+                </button>
+              ` : ''}
+              ${isAvailable ? `
+                <button id="btn-delete-cuda" class="btn btn-danger" style="font-size: 13px; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.4);">
+                  Remove GPU Backend
+                </button>
+              ` : ''}
+            </div>
           </div>
         </div>
       `;
@@ -403,9 +493,69 @@ async function renderSettingsPage(container) {
     container.querySelectorAll('.settings-tab-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         activeTab = btn.getAttribute('data-tab');
-        render();
+        if (activeTab === 'gpu') {
+          fetchCudaStatus().then(() => render());
+        } else {
+          render();
+        }
       });
     });
+
+    // GPU Actions
+    const downloadBtn = document.getElementById('btn-download-cuda');
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', async () => {
+        try {
+          let port = 5555;
+          if (window.electronAPI) port = await window.electronAPI.getSidecarPort();
+          const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '127.0.0.1' : (window.location.hostname || 'localhost');
+          let token = '';
+          if (window.electronAPI && window.electronAPI.getSidecarToken) {
+            try { token = await window.electronAPI.getSidecarToken(); } catch (e) {}
+          }
+          const headers = token ? { 'X-Sidecar-Token': token } : {};
+          await fetch(`http://${hostname}:${port}/system/cuda/download`, { method: 'POST', headers });
+          fetchCudaStatus().then(() => render());
+        } catch (e) {
+          console.error('Download CUDA error:', e);
+        }
+      });
+    }
+
+    const toggleBtn = document.getElementById('btn-toggle-cuda');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', async () => {
+        const nextVariant = cudaStatus?.active ? 'cpu' : 'cuda';
+        if (window.electronAPI && window.electronAPI.setBackendVariant) {
+          await window.electronAPI.setBackendVariant(nextVariant);
+        }
+        fetchCudaStatus().then(() => render());
+      });
+    }
+
+    const deleteBtn = document.getElementById('btn-delete-cuda');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to remove the GPU backend files from disk?')) return;
+        try {
+          let port = 5555;
+          if (window.electronAPI) port = await window.electronAPI.getSidecarPort();
+          const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '127.0.0.1' : (window.location.hostname || 'localhost');
+          let token = '';
+          if (window.electronAPI && window.electronAPI.getSidecarToken) {
+            try { token = await window.electronAPI.getSidecarToken(); } catch (e) {}
+          }
+          const headers = token ? { 'X-Sidecar-Token': token } : {};
+          await fetch(`http://${hostname}:${port}/system/cuda/delete`, { method: 'POST', headers });
+          if (window.electronAPI && window.electronAPI.setBackendVariant) {
+            await window.electronAPI.setBackendVariant('cpu');
+          }
+          fetchCudaStatus().then(() => render());
+        } catch (e) {
+          console.error('Delete CUDA error:', e);
+        }
+      });
+    }
 
     // Save Settings
     document.getElementById('btn-save-settings')?.addEventListener('click', async () => {
@@ -427,8 +577,6 @@ async function renderSettingsPage(container) {
         setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
       }
     });
-
-
 
     // Clear Logs
     document.getElementById('btn-clear-logs')?.addEventListener('click', () => {

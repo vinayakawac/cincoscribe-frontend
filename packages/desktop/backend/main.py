@@ -48,8 +48,15 @@ logger.info("Importing routers and engine dependencies...")
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from router import health, tts, asr, models, merge
+from router import health, tts, asr, models, merge, system
+from services.cuda_backend import check_and_update_cuda_binary, is_cuda_active
 logger.info("Backend imports successful")
+
+# Startup check for installed CUDA binary auto-updates
+try:
+    check_and_update_cuda_binary()
+except Exception as e:
+    logger.warning(f"CUDA startup check error: {e}")
 
 # GPU Detection
 try:
@@ -62,6 +69,8 @@ try:
 except ImportError:
     logger.info("GPU: Torch not installed (CPU only)")
 
+variant = "CUDA" if is_cuda_active() else "CPU"
+logger.info(f"Active backend variant: {variant}")
 logger.info(f"Model cache: {models_dir}")
 logger.info("Ready")
 
@@ -102,6 +111,7 @@ app.include_router(tts.router)
 app.include_router(asr.router)
 app.include_router(models.router)
 app.include_router(merge.router)
+app.include_router(system.router)
 
 @app.get("/logs")
 def get_logs():

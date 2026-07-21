@@ -101,13 +101,20 @@ class FasterWhisperASR(ASRBackend):
             except ImportError as exc:
                 raise EngineError("faster-whisper is not installed.") from exc
 
-            try:
-                import torch
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                compute_type = "float16" if device == "cuda" else "int8"
-            except ImportError:
-                device = "cpu"
-                compute_type = "int8"
+            from services.cuda_backend import is_cuda_active
+            cuda_requested = is_cuda_active()
+
+            import importlib
+            has_torch_cuda = False
+            if importlib.util.find_spec("torch") is not None:
+                try:
+                    torch = importlib.import_module("torch")
+                    has_torch_cuda = getattr(torch.cuda, "is_available", lambda: False)()
+                except Exception:
+                    pass
+
+            device = "cuda" if (cuda_requested or has_torch_cuda) else "cpu"
+            compute_type = "float16" if device == "cuda" else "int8"
 
             logger.info(
                 "Loading local Whisper model %s from %s on %s (%s)",
