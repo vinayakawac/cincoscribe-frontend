@@ -51,6 +51,12 @@ class SettingsPayload(BaseModel):
     models_dir: str
 
 
+class DeletePayload(BaseModel):
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    model_id: Optional[str] = None
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _snapshot_path(model_id: str) -> Optional[str]:
@@ -117,31 +123,42 @@ except ImportError:
 
 thread_local = threading.local()
 
+_active_download_model_id: Optional[str] = None
+_active_download_lock = threading.Lock()
+
 if _TQDM_AVAILABLE:
     class CancellableTqdm(_BaseTqdm):  # type: ignore[misc]
         """Custom tqdm class that signals the registry and aborts if cancel_event is set."""
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._model_id     = getattr(thread_local, "active_model_id", None)
-            self._cancel_event = getattr(thread_local, "active_cancel_event", None)
-            if self._model_id:
-                registry.update_progress(self._model_id, 0, self.total or 0, 0.0)
+            with _active_download_lock:
+                active_id = _active_download_model_id
+            self._model_id = (
+                getattr(thread_local, "active_model_id", None)
+                or active_id
+                or registry.get_any_downloading_model_id()
+            )
+            self._cancel_event = (
+                getattr(thread_local, "active_cancel_event", None)
+                or (registry.get_cancel_event(self._model_id) if self._model_id else None)
+            )
+            unit_str = str(getattr(self, "unit", "") or "").lower()
+            self._is_byte_tqdm = (
+                unit_str == "b"
+                or getattr(self, "unit_scale", False)
+                or (self.total is not None and self.total > 1024)
+            )
 
         def update(self, n: int = 1) -> None:
-            cancel_evt = getattr(thread_local, "active_cancel_event", None)
+            cancel_evt = self._cancel_event or getattr(thread_local, "active_cancel_event", None)
             if cancel_evt and cancel_evt.is_set():
                 raise InterruptedError("Download cancelled by user")
             super().update(n)
-            model_id = getattr(thread_local, "active_model_id", None)
-            if model_id:
+            model_id = self._model_id or getattr(thread_local, "active_model_id", None)
+            if model_id and self._is_byte_tqdm:
                 rate = self.format_dict.get("rate") or 0.0
-                registry.update_progress(
-                    model_id,
-                    self.n,
-                    self.total or 0,
-                    float(rate),
-                )
+                registry.add_download_bytes(model_id, n, float(rate))
 else:
     CancellableTqdm = None  # type: ignore[assignment,misc]
 
@@ -149,12 +166,16 @@ else:
 # ── Download worker (runs in daemon thread) ───────────────────────────────────
 
 def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
+    global _active_download_model_id
     meta     = MODEL_REGISTRY[model_id]
     repo_id  = meta["repo_id"]
     folder   = meta["folder"]
     dest_dir = config.models_dir / folder
 
     logger.info("[models] Starting download: %s from %s", model_id, repo_id)
+
+    with _active_download_lock:
+        _active_download_model_id = model_id
 
     thread_local.active_model_id = model_id
     thread_local.active_cancel_event = cancel_event
@@ -195,6 +216,9 @@ def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
         registry.set_failed(model_id, str(exc))
 
     finally:
+        with _active_download_lock:
+            if _active_download_model_id == model_id:
+                _active_download_model_id = None
         thread_local.__dict__.pop("active_model_id", None)
         thread_local.__dict__.pop("active_cancel_event", None)
 
@@ -448,6 +472,57 @@ def unload_model(model_id: str):
         "model_id":    model_id,
         "freed_bytes": freed,
     }
+
+
+# ── Delete model endpoints ───────────────────────────────────────────────────
+
+def _delete_model_files(model_id: str) -> bool:
+    if model_id not in MODEL_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Unknown model: {model_id}")
+
+    current = registry.get(model_id)
+    if current["status"] == STATUS_LOADED:
+        unload_model(model_id)
+
+    meta = MODEL_REGISTRY[model_id]
+    folder = meta["folder"]
+    target_path = config.models_dir / folder
+
+    deleted = False
+    if target_path.exists():
+        try:
+            if target_path.is_dir():
+                shutil.rmtree(target_path)
+            else:
+                target_path.unlink()
+            deleted = True
+        except Exception as exc:
+            logger.error("[models] Failed to delete model directory %s: %s", target_path, exc)
+            raise HTTPException(status_code=500, detail=f"Failed to delete model files: {exc}") from exc
+
+    registry.set_deleted(model_id)
+    return deleted
+
+
+@router.post("/engines/models/delete")
+def legacy_delete_model(payload: DeletePayload):
+    model_id = payload.model_name or payload.model_id
+    if not model_id:
+        raise HTTPException(status_code=400, detail="Missing model_name or model_id")
+    _delete_model_files(model_id)
+    return {"status": "deleted", "model_id": model_id, "message": f"{model_id} removed successfully"}
+
+
+@router.delete("/models/{model_id}")
+def delete_model_endpoint(model_id: str):
+    _delete_model_files(model_id)
+    return {"status": "deleted", "model_id": model_id, "message": f"{model_id} removed successfully"}
+
+
+@router.post("/models/{model_id}/delete")
+def delete_model_post_endpoint(model_id: str):
+    _delete_model_files(model_id)
+    return {"status": "deleted", "model_id": model_id, "message": f"{model_id} removed successfully"}
 
 
 # ── Legacy compat: GET /engines/models/status ────────────────────────────────

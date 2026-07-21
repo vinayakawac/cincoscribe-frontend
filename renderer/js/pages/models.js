@@ -7,6 +7,7 @@ function renderModelsPage(container) {
   let expandedModelKey = null;
 
   const STATIC_ASR_MODELS = [
+    { model_id: 'tiny', name: 'Whisper Tiny', category: 'asr', size_label: '~78 MB', min_vram_mb: 0, description: 'Fastest, smallest ASR. Good for quick drafts or low-end hardware.', status: 'not_downloaded' },
     { model_id: 'base', name: 'Whisper Base', category: 'asr', size_label: '~281 MB', min_vram_mb: 0, description: 'Balanced accuracy and speed. Default recommended ASR model.', status: 'not_downloaded' },
     { model_id: 'small', name: 'Whisper Small', category: 'asr', size_label: '~922 MB', min_vram_mb: 1024, description: 'Better accuracy for accents and noisy audio.', status: 'not_downloaded' },
     { model_id: 'medium', name: 'Whisper Medium', category: 'asr', size_label: '~1.5 GB', min_vram_mb: 2048, description: 'High accuracy for complex audio or multiple accents.', status: 'not_downloaded' },
@@ -15,7 +16,7 @@ function renderModelsPage(container) {
   ];
 
   const STATIC_TTS_MODELS = [
-    { model_id: 'kokoro', name: 'Kokoro 82M', category: 'tts', size_label: '~82 MB', min_vram_mb: 0, description: 'Ultra lightweight, high-fidelity local speech synthesis.', status: 'not_downloaded' },
+    { model_id: 'kokoro', name: 'Kokoro 82M', category: 'tts', size_label: '~350 MB', min_vram_mb: 0, description: 'Ultra lightweight, high-fidelity local speech synthesis.', status: 'not_downloaded' },
     { model_id: 'qwen_1_7b', name: 'Qwen TTS 1.7B', category: 'tts', size_label: '~3.4 GB', min_vram_mb: 4096, description: 'High-fidelity speech synthesis based on Qwen-Audio.', status: 'not_downloaded' },
     { model_id: 'qwen_0_6b', name: 'Qwen TTS 0.6B', category: 'tts', size_label: '~1.2 GB', min_vram_mb: 2048, description: 'Balanced quality and performance version of Qwen TTS.', status: 'not_downloaded' },
     { model_id: 'qwen_custom_1_7b', name: 'Qwen CustomVoice 1.7B', category: 'tts', size_label: '~3.4 GB', min_vram_mb: 4096, description: 'Personalized voice cloning model based on Qwen.', status: 'not_downloaded' },
@@ -130,24 +131,12 @@ function renderModelsPage(container) {
       }
 
       const actionEl = row.querySelector('.model-details-action');
-      if (actionEl && isDownloading) {
-        const pct = Math.round((m.progress || 0) * 100);
-        const dlStr = formatBytes(m.bytes_downloaded);
-        const totStr = formatBytes(m.bytes_total);
-        const spdStr = formatSpeed(m.speed_bps);
-
-        actionEl.innerHTML = `
-          <div class="download-progress-box">
-            <div class="download-progress-track">
-              <div class="download-progress-bar" style="width: ${pct}%"></div>
-            </div>
-            <div class="download-progress-text">
-              <span>Downloading: ${dlStr} / ${totStr} (${pct}%) ${spdStr}</span>
-              <a href="#" class="btn-cancel-dl" data-id="${id}" style="color: #ef4444; text-decoration: none;">Cancel</a>
-            </div>
-          </div>
-        `;
-        bindRowEvents(row);
+      if (actionEl) {
+        const newHtml = renderModelActionHtml(m);
+        if (actionEl.innerHTML.trim() !== newHtml.trim()) {
+          actionEl.innerHTML = newHtml;
+          bindRowEvents(row);
+        }
       }
     });
   }
@@ -473,6 +462,56 @@ function renderModelsPage(container) {
     bindEvents();
   }
 
+  function renderModelActionHtml(m) {
+    const id = m.model_id;
+    const isDownloaded = m.downloaded || m.status === 'downloaded' || m.status === 'loaded';
+    const isDownloading = m.status === 'downloading';
+    const isLoaded = m.loaded || m.status === 'loaded';
+
+    if (isLoaded) {
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span style="font-size: 12px; color: #10b981; font-weight: 500;">✓ Model loaded in memory and ready.</span>
+          <button class="btn btn-secondary btn-sm btn-delete-model" data-id="${id}" style="border-radius: var(--radius-full); padding: 5px 12px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); font-weight: 600;">
+            Remove Model
+          </button>
+        </div>
+      `;
+    } else if (isDownloaded) {
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span style="font-size: 12px; color: var(--clr-primary); font-weight: 500;">✓ Model downloaded on disk.</span>
+          <button class="btn btn-secondary btn-sm btn-delete-model" data-id="${id}" style="border-radius: var(--radius-full); padding: 5px 12px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); font-weight: 600;">
+            Remove Model
+          </button>
+        </div>
+      `;
+    } else if (isDownloading) {
+      const pct = Math.round((m.progress || 0) * 100);
+      const dlStr = formatBytes(m.bytes_downloaded);
+      const totStr = formatBytes(m.bytes_total);
+      const spdStr = formatSpeed(m.speed_bps);
+
+      return `
+        <div class="download-progress-box">
+          <div class="download-progress-track">
+            <div class="download-progress-bar" style="width: ${pct}%"></div>
+          </div>
+          <div class="download-progress-text">
+            <span>Downloading: ${dlStr} / ${totStr} (${pct}%) ${spdStr}</span>
+            <a href="#" class="btn-cancel-dl" data-id="${id}" style="color: #ef4444; text-decoration: none;">Cancel</a>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <button class="btn btn-primary btn-sm btn-dl" data-id="${id}" style="background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 6px 14px; font-size: 11px;">
+          Download Model
+        </button>
+      `;
+    }
+  }
+
   function renderModelRow(m) {
     const id = m.model_id;
     const isDownloaded = m.downloaded || m.status === 'downloaded' || m.status === 'loaded';
@@ -509,49 +548,7 @@ function renderModelsPage(container) {
       </svg>
     `;
 
-    let actionHtml = '';
-    if (isLoaded) {
-      actionHtml = `
-        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-          <span style="font-size: 12px; color: #10b981; font-weight: 500;">✓ Model loaded in memory and ready.</span>
-          <button class="btn btn-secondary btn-sm btn-delete-model" data-id="${id}" style="border-radius: var(--radius-full); padding: 5px 12px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); font-weight: 600;">
-            Remove Model
-          </button>
-        </div>
-      `;
-    } else if (isDownloaded) {
-      actionHtml = `
-        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-          <span style="font-size: 12px; color: var(--clr-primary); font-weight: 500;">✓ Model downloaded on disk.</span>
-          <button class="btn btn-secondary btn-sm btn-delete-model" data-id="${id}" style="border-radius: var(--radius-full); padding: 5px 12px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); font-weight: 600;">
-            Remove Model
-          </button>
-        </div>
-      `;
-    } else if (isDownloading) {
-      const pct = Math.round((m.progress || 0) * 100);
-      const dlStr = formatBytes(m.bytes_downloaded);
-      const totStr = formatBytes(m.bytes_total);
-      const spdStr = formatSpeed(m.speed_bps);
-
-      actionHtml = `
-        <div class="download-progress-box">
-          <div class="download-progress-track">
-            <div class="download-progress-bar" style="width: ${pct}%"></div>
-          </div>
-          <div class="download-progress-text">
-            <span>Downloading: ${dlStr} / ${totStr} (${pct}%) ${spdStr}</span>
-            <a href="#" class="btn-cancel-dl" data-id="${id}" style="color: #ef4444; text-decoration: none;">Cancel</a>
-          </div>
-        </div>
-      `;
-    } else {
-      actionHtml = `
-        <button class="btn btn-primary btn-sm btn-dl" data-id="${id}" style="background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 6px 14px; font-size: 11px;">
-          Download Model
-        </button>
-      `;
-    }
+    const actionHtml = renderModelActionHtml(m);
 
     return `
       <div class="model-row ${expanded ? 'expanded' : ''}" data-model-id="${id}">

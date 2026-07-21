@@ -24,8 +24,8 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-tiny",
         "folder": "models--Systran--faster-whisper-tiny",
-        "size_bytes": 40 * 1024 * 1024,
-        "size_label": "~40 MB",
+        "size_bytes": 78 * 1024 * 1024,
+        "size_label": "~78 MB",
         "default_compute_type": "int8",
         "min_vram_mb": 0,
         "description": "Fastest, smallest ASR. Good for quick drafts or low-end hardware.",
@@ -88,8 +88,8 @@ MODEL_REGISTRY: dict[str, dict] = {
         "folder": "kokoro-en-v0_19",
         "local_dir": True,
         "allow_patterns": ["*.onnx", "*.txt", "espeak-ng-data/*"],
-        "size_bytes": 82 * 1024 * 1024,
-        "size_label": "~82 MB",
+        "size_bytes": 350 * 1024 * 1024,
+        "size_label": "~350 MB",
         "default_compute_type": "int8",
         "min_vram_mb": 0,
         "description": "Ultra lightweight, high-fidelity local speech synthesis.",
@@ -317,6 +317,30 @@ class ModelRegistry:
             s["progress"]  = min(0.99, bytes_downloaded / total)
             s["speed_bps"] = speed_bps
 
+    def add_download_bytes(self, model_id: str, delta_bytes: int, speed_bps: float) -> None:
+        with self._lock:
+            s = self._state[model_id]
+            if s["status"] != STATUS_DOWNLOADING:
+                return
+            s["bytes_downloaded"] += delta_bytes
+            total = max(s["bytes_total"] or 0, MODEL_REGISTRY[model_id].get("size_bytes", 1), s["bytes_downloaded"])
+            s["bytes_total"] = total
+            s["progress"] = min(0.99, s["bytes_downloaded"] / total)
+            s["speed_bps"] = speed_bps
+
+    def get_any_downloading_model_id(self) -> Optional[str]:
+        with self._lock:
+            for mid, s in self._state.items():
+                if s["status"] == STATUS_DOWNLOADING:
+                    return mid
+            return None
+
+    def get_cancel_event(self, model_id: str) -> Optional[threading.Event]:
+        with self._lock:
+            if model_id in self._state:
+                return self._state[model_id].get("_cancel_event")
+            return None
+
     def set_downloaded(self, model_id: str) -> None:
         with self._lock:
             s = self._state[model_id]
@@ -393,6 +417,10 @@ class ModelRegistry:
                 s["compute_type"] = None
                 s["device"]       = None
                 s["mem_freed_bytes"] = mem_freed_bytes
+
+    def set_deleted(self, model_id: str) -> None:
+        with self._lock:
+            self._state[model_id] = _blank_state()
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
