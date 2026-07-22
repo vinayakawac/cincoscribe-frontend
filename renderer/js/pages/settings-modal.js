@@ -148,9 +148,7 @@ async function renderSettingsPage(container) {
   }
 
   function init() {
-    // Render UI IMMEDIATELY so page load is 0ms instant
     render();
-    // Check server health asynchronously in background
     checkServerHealth().then(() => render());
   }
 
@@ -161,7 +159,6 @@ async function renderSettingsPage(container) {
       return;
     }
 
-    // Trigger log polling if logs tab is active
     if (activeTab === 'logs') {
       startLogsPolling();
     } else {
@@ -173,80 +170,134 @@ async function renderSettingsPage(container) {
     }
 
     const tabs = [
-      { id: 'general', label: 'General' },
-      { id: 'gpu', label: 'GPU' },
-      { id: 'logs', label: 'Logs' },
-      { id: 'about', label: 'About' }
+      {
+        id: 'general',
+        label: 'General',
+        icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`
+      },
+      {
+        id: 'gpu',
+        label: 'GPU Acceleration',
+        icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>`
+      },
+      {
+        id: 'logs',
+        label: 'System Logs',
+        icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`
+      },
+      {
+        id: 'about',
+        label: 'About',
+        icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+      }
     ];
 
     container.innerHTML = `
       <style>
-        .settings-container {
+        .settings-revamped {
           animation: fade-up 280ms cubic-bezier(0.16,1,0.3,1) both;
           width: 100%;
+          max-width: 900px;
+          margin: 0 auto;
         }
-        .settings-tab-btn {
-          background: none;
-          border: none;
-          color: var(--clr-text-muted);
-          font-size: 14px;
-          font-weight: 500;
-          padding: 8px 0;
-          cursor: pointer;
-          position: relative;
-          transition: color 150ms ease;
-        }
-        .settings-tab-btn:hover {
-          color: var(--clr-text);
-        }
-        .settings-tab-btn.active {
-          color: var(--clr-text);
-          font-weight: 600;
-        }
-        .settings-tab-btn.active::after {
-          content: '';
-          position: absolute;
-          bottom: -9px;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background-color: var(--clr-text);
-        }
-        .social-card {
-          flex: 1;
+        .settings-header-banner {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: var(--sp-4);
+          padding-bottom: 20px;
+          margin-bottom: 20px;
+          border-bottom: 1px solid var(--clr-border);
+        }
+        .settings-title-group h2 {
+          font-family: var(--ff-display);
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--clr-text);
+          margin: 0 0 4px 0;
+          letter-spacing: -0.02em;
+        }
+        .settings-title-group p {
+          font-size: 13px;
+          color: var(--clr-text-muted);
+          margin: 0;
+        }
+        .settings-nav-pills {
+          display: flex;
+          gap: 6px;
+          background: var(--clr-bg-subtle);
+          padding: 4px;
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--clr-border);
+          margin-bottom: 24px;
+        }
+        .settings-nav-pill {
+          flex: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: transparent;
+          border: none;
+          color: var(--clr-text-muted);
+          font-size: 13px;
+          font-weight: 500;
+          padding: 9px 16px;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: all 180ms ease;
+          white-space: nowrap;
+        }
+        .settings-nav-pill:hover {
+          color: var(--clr-text);
+          background: rgba(255, 255, 255, 0.04);
+        }
+        .settings-nav-pill.active {
+          color: var(--clr-text);
+          background: var(--clr-surface-raised, #262626);
+          font-weight: 600;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .settings-card {
           background: var(--clr-bg-subtle);
           border: 1px solid var(--clr-border);
           border-radius: var(--radius-lg);
-          text-decoration: none;
-          transition: all 200ms ease;
+          padding: 20px;
+          margin-bottom: 20px;
         }
-        .social-card:hover {
-          border-color: var(--clr-border-med);
-          background: var(--clr-bg-muted);
+        .settings-card-title {
+          font-family: var(--ff-display);
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--clr-text);
+          margin: 0 0 4px 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
-        .setting-group {
+        .settings-card-subtitle {
+          font-size: 12px;
+          color: var(--clr-text-muted);
+          margin: 0 0 16px 0;
+        }
+        .setting-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: var(--sp-4) 0;
-          border-bottom: 1px solid var(--clr-border);
+          padding: 14px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
-        .setting-group:last-child {
+        .setting-row:last-child {
           border-bottom: none;
+          padding-bottom: 0;
         }
-        .setting-info {
-          flex: 1;
-          padding-right: var(--sp-4);
+        .setting-row:first-child {
+          padding-top: 0;
         }
         .setting-label {
           font-size: 13px;
           font-weight: 600;
           color: var(--clr-text);
-          margin: 0 0 4px 0;
+          margin: 0 0 2px 0;
         }
         .setting-desc {
           font-size: 11px;
@@ -254,16 +305,145 @@ async function renderSettingsPage(container) {
           margin: 0;
           line-height: 1.4;
         }
+        .social-card {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 16px;
+          background: var(--clr-bg-subtle);
+          border: 1px solid var(--clr-border);
+          border-radius: var(--radius-lg);
+          text-decoration: none;
+          transition: all 200ms ease;
+        }
+        .social-card:hover {
+          border-color: var(--clr-border-hover);
+          background: var(--clr-surface-raised);
+        }
+
+        /* ── Custom Styled Dropdowns ──────────────── */
+        .select-wrapper-custom {
+          position: relative;
+          display: inline-block;
+          min-width: 190px;
+        }
+        .select-wrapper-custom::after {
+          content: '';
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 0;
+          height: 0;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-top: 5px solid var(--clr-text-muted, #a0a0a0);
+          pointer-events: none;
+          transition: border-top-color 150ms ease;
+        }
+        .select-wrapper-custom:hover::after {
+          border-top-color: var(--clr-text, #ffffff);
+        }
+        .select-input-styled {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          width: 100%;
+          padding: 8px 32px 8px 14px;
+          background: var(--clr-surface-raised, #262626);
+          border: 1px solid var(--clr-border, rgba(255,255,255,0.12));
+          color: var(--clr-text, #ffffff);
+          border-radius: var(--radius-md, 8px);
+          font-size: 13px;
+          font-weight: 500;
+          font-family: var(--ff-sans);
+          outline: none;
+          cursor: pointer;
+          transition: all 150ms ease;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .select-input-styled:hover {
+          background: var(--clr-bg-muted, #303030);
+          border-color: var(--clr-border-hover, rgba(255,255,255,0.24));
+        }
+        .select-input-styled:focus {
+          border-color: var(--clr-primary, #f59e0b);
+          box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+        }
+        .select-input-styled option {
+          background: #1d1d1d;
+          color: #ffffff;
+          padding: 10px;
+          font-size: 13px;
+        }
+
+        /* Server input button group alignment */
+        .server-input-group {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          height: 34px;
+          box-sizing: border-box;
+        }
+        .server-input-field {
+          flex: 1;
+          height: 34px !important;
+          min-height: 34px !important;
+          box-sizing: border-box;
+          padding: 0 10px;
+          background: var(--clr-bg);
+          border: 1px solid var(--clr-border);
+          border-right: none;
+          color: var(--clr-text-muted);
+          border-top-left-radius: var(--radius);
+          border-bottom-left-radius: var(--radius);
+          border-top-right-radius: 0;
+          border-bottom-right-radius: 0;
+          font-size: 11px;
+          font-family: var(--ff-mono);
+          margin: 0;
+          outline: none;
+        }
+        .server-btn-action {
+          height: 34px !important;
+          min-height: 34px !important;
+          box-sizing: border-box;
+          padding: 0 14px;
+          font-size: 11px;
+          font-weight: 600;
+          border-top-left-radius: 0 !important;
+          border-bottom-left-radius: 0 !important;
+          border-top-right-radius: var(--radius) !important;
+          border-bottom-right-radius: var(--radius) !important;
+          margin: 0 !important;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          white-space: nowrap;
+          cursor: pointer;
+        }
       </style>
-      <div class="page-container page-sections settings-container" style="position: relative;">
+
+      <div class="page-container settings-revamped">
+        <!-- Header Banner -->
+        <div class="settings-header-banner">
+          <div class="settings-title-group">
+            <h2>Preferences & Workstation</h2>
+            <p>Manage local sidecar server, GPU acceleration, and system settings.</p>
+          </div>
+        </div>
+
         <!-- Navigation Tabs -->
-        <div style="display: flex; gap: var(--sp-6); border-bottom: 1px solid var(--clr-border); margin-bottom: var(--sp-6);">
+        <nav class="settings-nav-pills" aria-label="Settings categories">
           ${tabs.map(tab => `
-            <button class="settings-tab-btn ${activeTab === tab.id ? 'active' : ''}" data-tab="${tab.id}">
-              ${tab.label}
+            <button class="settings-nav-pill ${activeTab === tab.id ? 'active' : ''}" data-tab="${tab.id}">
+              ${tab.icon}
+              <span>${tab.label}</span>
             </button>
           `).join('')}
-        </div>
+        </nav>
 
         <!-- Tab Body -->
         <div class="settings-tab-content">
@@ -278,110 +458,123 @@ async function renderSettingsPage(container) {
   function renderTabContent() {
     if (activeTab === 'general') {
       return `
-        <!-- Support Links -->
-        <div style="display: flex; gap: var(--sp-4); margin-bottom: var(--sp-6);">
+        <!-- Support Links Header -->
+        <div style="display: flex; gap: 14px; margin-bottom: 20px;">
           <a href="https://ko-fi.com/vinayaka" target="_blank" class="social-card">
             <div>
-              <h4 style="font-size: 13px; font-weight: 600; color: var(--clr-text); margin: 0 0 4px 0;">Support on Ko-fi</h4>
-              <p style="font-size: 11px; color: var(--clr-text-muted); margin: 0;">Consider donating to support development</p>
+              <h4 style="font-size: 13px; font-weight: 600; color: var(--clr-text); margin: 0 0 2px 0;">Support Development</h4>
+              <p style="font-size: 11px; color: var(--clr-text-muted); margin: 0;">Donate on Ko-fi to support open-source work</p>
             </div>
-            <span style="color: var(--clr-text-faint);">${Utils.icons.chevronRight || '→'}</span>
+            <span style="color: var(--clr-text-muted); font-size: 14px;">↗</span>
           </a>
           <a href="https://github.com/vinayakawac/CincoScribe" target="_blank" class="social-card">
             <div>
-              <h4 style="font-size: 13px; font-weight: 600; color: var(--clr-text); margin: 0 0 4px 0;">Join the GitHub</h4>
-              <p style="font-size: 11px; color: var(--clr-text-muted); margin: 0;">View codebase and report issues</p>
+              <h4 style="font-size: 13px; font-weight: 600; color: var(--clr-text); margin: 0 0 2px 0;">GitHub Project</h4>
+              <p style="font-size: 11px; color: var(--clr-text-muted); margin: 0;">View source code, releases and issues</p>
             </div>
-            <span style="color: var(--clr-text-faint);">${Utils.icons.chevronRight || '→'}</span>
+            <span style="color: var(--clr-text-muted); font-size: 14px;">↗</span>
           </a>
         </div>
 
-        <!-- Server URL -->
-        <div class="setting-group" style="padding-top: 0;">
-          <div class="setting-info">
-            <h4 class="setting-label">Server URL</h4>
-            <p class="setting-desc">The address of your CincoScribe sidecar backend server.</p>
-          </div>
-          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); width: 45%; min-width: 220px;">
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
-              <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: ${isServerOnline ? '#10b981' : '#ef4444'};"></span>
-              <span style="color: ${isServerOnline ? '#10b981' : '#ef4444'};">${isServerOnline ? 'Online' : 'Offline'}</span>
+        <!-- Server Card (No Header Title/Subtitle) -->
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h4 class="setting-label">Server Connection</h4>
+              <p class="setting-desc">Local address where sidecar backend process is running.</p>
             </div>
-            <div style="display: flex; align-items: center; width: 100%; height: 32px; box-sizing: border-box;">
-              <input
-                id="settings-server-url"
-                type="text"
-                value="http://127.0.0.1:5555"
-                disabled
-                style="flex: 1; height: 32px; min-height: 32px; box-sizing: border-box; padding: 0 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); border-right: none; color: var(--clr-text-muted); border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); border-top-right-radius: 0; border-bottom-right-radius: 0; font-size: 11px; font-family: var(--ff-mono); margin: 0; outline: none;"
-              />
-              ${isServerOnline ? `
-                <button id="btn-restart-server" class="btn btn-secondary" title="Restart Server" style="height: 32px !important; min-height: 32px !important; box-sizing: border-box; padding: 0 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); margin: 0; border: 1px solid var(--clr-border); color: var(--clr-text, #ffffff) !important; background: var(--clr-bg-subtle, #1d1d1d) !important; cursor: pointer; transform: none !important; transition: background 150ms ease !important; animation: none !important;" aria-label="Restart Server">
-                  Restart Server
-                </button>
-              ` : `
-                <button id="btn-start-server" class="btn btn-primary" title="Restart Server" style="height: 32px !important; min-height: 32px !important; box-sizing: border-box; padding: 0 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); margin: 0; color: oklch(0.10 0.01 255) !important; cursor: pointer; transform: none !important; transition: background 150ms ease !important; animation: none !important;" aria-label="Restart Server">
-                  Restart Server
-                </button>
-              `}
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: 45%; min-width: 240px;">
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
+                <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background-color: ${isServerOnline ? '#10b981' : '#ef4444'}; box-shadow: 0 0 8px ${isServerOnline ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'};"></span>
+                <span style="color: ${isServerOnline ? '#10b981' : '#ef4444'};">${isServerOnline ? 'Online' : 'Offline'}</span>
+              </div>
+              <div class="server-input-group">
+                <input
+                  id="settings-server-url"
+                  type="text"
+                  value="http://127.0.0.1:5555"
+                  disabled
+                  class="server-input-field"
+                />
+                ${isServerOnline ? `
+                  <button id="btn-restart-server" class="btn btn-secondary server-btn-action" title="Restart Server" style="border: 1px solid var(--clr-border); color: var(--clr-text, #ffffff) !important; background: var(--clr-surface-raised, #262626) !important;" aria-label="Restart Server">
+                    Restart Server
+                  </button>
+                ` : `
+                  <button id="btn-start-server" class="btn btn-primary server-btn-action" title="Start Server" style="color: oklch(0.10 0.01 255) !important;" aria-label="Start Server">
+                    Start Server
+                  </button>
+                `}
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Default Language -->
-        <div class="setting-group">
-          <div class="setting-info">
-            <h4 class="setting-label">Language</h4>
-            <p class="setting-desc">Choose the default transcription target language.</p>
+        <!-- Recognition & Interface Options Card -->
+        <div class="settings-card">
+          <div class="settings-card-title">
+            <span>Recognition & Appearance</span>
           </div>
-          <select id="settings-language" style="padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text); border-radius: var(--radius); font-size: 13px; min-width: 150px;">
-            ${[
-          ['auto', 'Auto Detect'],
-          ['en', 'English'],
-          ['hi', 'Hindi'],
-          ['ar', 'Arabic'],
-          ['zh', 'Chinese'],
-          ['es', 'Spanish'],
-          ['fr', 'French'],
-          ['de', 'German'],
-          ['pt', 'Portuguese'],
-          ['ru', 'Russian'],
-          ['ja', 'Japanese'],
-          ['ko', 'Korean'],
-        ].map(([val, label]) =>
-          `<option value="${val}" ${language === val ? 'selected' : ''}>${label}</option>`
-        ).join('')}
-          </select>
+          <p class="settings-card-subtitle">Configure default transcription language and theme.</p>
+
+          <div class="setting-row">
+            <div>
+              <h4 class="setting-label">Default Language</h4>
+              <p class="setting-desc">Primary transcription language for new audio jobs.</p>
+            </div>
+            <div class="select-wrapper-custom">
+              <select id="settings-language" class="select-input-styled">
+                ${[
+                  ['auto', 'Auto Detect'],
+                  ['en', 'English'],
+                  ['hi', 'Hindi'],
+                  ['ar', 'Arabic'],
+                  ['zh', 'Chinese'],
+                  ['es', 'Spanish'],
+                  ['fr', 'French'],
+                  ['de', 'German'],
+                  ['pt', 'Portuguese'],
+                  ['ru', 'Russian'],
+                  ['ja', 'Japanese'],
+                  ['ko', 'Korean'],
+                ].map(([val, label]) =>
+                  `<option value="${val}" ${language === val ? 'selected' : ''}>${label}</option>`
+                ).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div>
+              <h4 class="setting-label">Network Permission</h4>
+              <p class="setting-desc">Allow online connections for downloading models and updates.</p>
+            </div>
+            <div class="select-wrapper-custom">
+              <select id="settings-internet" class="select-input-styled">
+                <option value="true" ${internetAccessAllowed === true ? 'selected' : ''}>Allowed (Online)</option>
+                <option value="false" ${internetAccessAllowed === false ? 'selected' : ''}>Disabled (Strict Local)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div>
+              <h4 class="setting-label">Appearance Theme</h4>
+              <p class="setting-desc">Application color interface theme mode.</p>
+            </div>
+            <div class="select-wrapper-custom">
+              <select id="settings-theme" class="select-input-styled">
+                <option value="dark" selected>Dark Theme</option>
+                <option value="light">Light Theme</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <!-- Internet Access -->
-        <div class="setting-group">
-          <div class="setting-info">
-            <h4 class="setting-label">Internet Access</h4>
-            <p class="setting-desc">Permit downloading models and checking for updates online.</p>
-          </div>
-          <select id="settings-internet" style="padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text); border-radius: var(--radius); font-size: 13px; min-width: 150px;">
-            <option value="true" ${internetAccessAllowed === true ? 'selected' : ''}>On</option>
-            <option value="false" ${internetAccessAllowed === false ? 'selected' : ''}>Off</option>
-          </select>
-        </div>
-
-        <!-- Theme Selection -->
-        <div class="setting-group">
-          <div class="setting-info">
-            <h4 class="setting-label">Theme</h4>
-            <p class="setting-desc">Match your system appearance, or select dark view mode.</p>
-          </div>
-          <select id="settings-theme" style="padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text); border-radius: var(--radius); font-size: 13px; min-width: 150px;">
-            <option value="dark" selected>Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </div>
-
-        <!-- Footer Action -->
-        <div style="display: flex; justify-content: flex-end; margin-top: var(--sp-6);">
-          <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
-          <span id="save-status" style="display: none; margin-left: 12px; align-self: center; font-size: 13px; color: #10b981;">Saved!</span>
+        <!-- Save Button Footer -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 10px;">
+          <span id="save-status" style="display: none; margin-right: 14px; font-size: 13px; font-weight: 600; color: #10b981;">✓ Saved successfully</span>
+          <button id="btn-save-settings" class="btn btn-primary" style="padding: 10px 24px; font-size: 13px;">Save Settings</button>
         </div>
       `;
     } else if (activeTab === 'gpu') {
@@ -395,29 +588,29 @@ async function renderSettingsPage(container) {
       const hasFailed = !isDownloading && lastStatus.startsWith('Failed:');
 
       return `
-        <div style="padding: var(--sp-4) 0; display: flex; flex-direction: column; gap: var(--sp-5);">
-          <div>
-            <h3 style="font-family: var(--ff-display); font-size: 18px; font-weight: 700; color: var(--clr-text); margin: 0;">GPU Acceleration (CUDA)</h3>
-            <p style="font-size: 13px; color: var(--clr-text-muted); margin: 6px 0 0 0;">Opt-in CUDA acceleration for faster-whisper and sherpa-onnx TTS.</p>
+        <div class="settings-card">
+          <div class="settings-card-title">
+            <span>Hardware Acceleration (CUDA GPU)</span>
           </div>
+          <p class="settings-card-subtitle">Enable NVIDIA CUDA GPU acceleration for faster Whisper transcription and TTS.</p>
 
-          <div style="background: var(--clr-bg-subtle); border: 1px solid var(--clr-border); border-radius: var(--radius-lg); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4);">
+          <div style="background: var(--clr-bg); border: 1px solid var(--clr-border); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; gap: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--clr-text);">Active Backend Variant</h4>
+                <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--clr-text);">Active Execution Backend</h4>
                 <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--clr-text-muted);">
-                  Currently running: <strong style="color: var(--clr-primary);">${isActive ? 'CUDA (GPU)' : 'CPU'}</strong>
+                  Current engine: <strong style="color: var(--clr-primary); font-size: 13px;">${isActive ? 'NVIDIA CUDA (GPU)' : 'Standard CPU Mode'}</strong>
                 </p>
               </div>
               ${isAvailable ? `
-                <button id="btn-toggle-cuda" class="btn ${isActive ? 'btn-secondary' : 'btn-primary'}" style="font-size: 13px;">
-                  ${isActive ? 'Switch to CPU' : 'Enable CUDA'}
+                <button id="btn-toggle-cuda" class="btn ${isActive ? 'btn-secondary' : 'btn-primary'}" style="font-size: 12px; padding: 7px 16px;">
+                  ${isActive ? 'Switch to CPU' : 'Enable CUDA GPU'}
                 </button>
               ` : ''}
             </div>
 
             ${!isSupported ? `
-              <div style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 12px; font-size: 12px; color: #ef4444;">
+              <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius); padding: 12px; font-size: 12px; color: #ef4444;">
                 ${escapeHtml(reason)}
               </div>
             ` : ''}
@@ -432,24 +625,24 @@ async function renderSettingsPage(container) {
             ${isDownloading ? `
               <div style="display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--clr-text-muted);">
-                  <span>${escapeHtml(lastStatus || 'Downloading...')}</span>
+                  <span>${escapeHtml(lastStatus || 'Downloading CUDA binaries...')}</span>
                   <span>${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) + '%' : ''}</span>
                 </div>
-                <div style="width: 100%; height: 6px; background: var(--clr-bg); border-radius: 3px; overflow: hidden;">
+                <div style="width: 100%; height: 6px; background: var(--clr-bg-subtle); border-radius: 3px; overflow: hidden;">
                   <div style="height: 100%; width: ${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%; background: var(--clr-primary); transition: width 200ms ease;"></div>
                 </div>
               </div>
             ` : ''}
 
-            <div style="display: flex; gap: var(--sp-3); margin-top: 8px;">
+            <div style="display: flex; gap: 10px; margin-top: 4px;">
               ${isSupported && !isAvailable && !isDownloading ? `
                 <button id="btn-download-cuda" class="btn btn-primary" style="font-size: 13px;">
-                  ${hasFailed ? 'Retry Download' : 'Download GPU Backend'}
+                  ${hasFailed ? 'Retry Download' : 'Download GPU Acceleration Package'}
                 </button>
               ` : ''}
               ${isAvailable ? `
-                <button id="btn-delete-cuda" class="btn btn-danger" style="font-size: 13px; background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.4);">
-                  Remove GPU Backend
+                <button id="btn-delete-cuda" class="btn btn-danger" style="font-size: 12px; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 6px 14px;">
+                  Remove GPU Binaries
                 </button>
               ` : ''}
             </div>
@@ -458,39 +651,54 @@ async function renderSettingsPage(container) {
       `;
     } else if (activeTab === 'logs') {
       return `
-        <div style="display: flex; flex-direction: column; height: 350px;">
-          <textarea
-            id="terminal-logs"
-            readonly
-            style="flex: 1; background: var(--clr-bg-code); color: #86868b; border: 1px solid var(--clr-border); border-radius: var(--radius-lg); padding: var(--sp-4); font-family: var(--ff-mono); font-size: 11px; line-height: 1.5; resize: none; overflow-y: auto; outline: none; margin-bottom: var(--sp-3);"
-          >${escapeHtml(logsText)}</textarea>
-          <div style="display: flex; justify-content: flex-end; gap: var(--sp-2);">
-            <button id="btn-clear-logs" class="btn btn-secondary" style="font-size: 12px; height: 32px; padding: 0 16px;">Clear Logs</button>
+        <div class="settings-card" style="padding: 0; overflow: hidden;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: var(--clr-surface-raised, #262626); border-bottom: 1px solid var(--clr-border);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.6);"></span>
+              <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: var(--clr-text);">Sidecar Diagnostics Console</h4>
+            </div>
+            <button id="btn-clear-logs" class="btn btn-secondary" style="font-size: 11px; height: 28px; padding: 0 12px;">Clear Console</button>
+          </div>
+          <div style="padding: 14px; background: var(--clr-bg-code, #101010);">
+            <textarea
+              id="terminal-logs"
+              readonly
+              style="width: 100%; height: 360px; box-sizing: border-box; background: transparent; color: #a0a0a0; border: none; font-family: var(--ff-mono, monospace); font-size: 11px; line-height: 1.5; resize: none; overflow-y: auto; outline: none; margin: 0;"
+            >${escapeHtml(logsText)}</textarea>
           </div>
         </div>
       `;
     } else if (activeTab === 'about') {
       return `
-        <div style="padding: var(--sp-2) 0;">
-          <h2 style="font-family: var(--ff-display); font-size: 20px; font-weight: 800; color: var(--clr-text); margin: 0 0 4px 0;">CincoScribe</h2>
-          <p style="font-size: 12px; color: var(--clr-text-faint); margin: 0 0 var(--sp-4) 0;">Version 0.1.0 • Built on Electron & FastAPI</p>
-          
-          <p style="font-size: 13px; color: var(--clr-text-muted); line-height: 1.6; margin: 0 0 var(--sp-6) 0; max-width: 600px;">
-            A local-first, privacy-focused speech transcription and voice synthesis workstation. All audio transcription and voice generations are processed locally on your computer—never sent to the cloud.
+        <div class="settings-card">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+            <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+              <img src="cincoscribe.png" alt="CincoScribe" style="width: 100%; height: 100%; object-fit: contain;">
+            </div>
+            <div>
+              <h3 style="font-family: var(--ff-display); font-size: 20px; font-weight: 800; color: var(--clr-text); margin: 0 0 2px 0;">CincoScribe</h3>
+              <p style="font-size: 12px; color: var(--clr-text-muted); margin: 0;">Version 0.1.0 • Offline Audio Workstation</p>
+            </div>
+          </div>
+
+          <p style="font-size: 13px; color: var(--clr-text-muted); line-height: 1.6; margin: 0 0 20px 0;">
+            CincoScribe is a local-first, privacy-focused speech transcription and voice synthesis workstation. All transcriptions and voice generations run locally on your computer—never sent to external cloud servers.
           </p>
 
-          <p style="font-size: 12px; color: var(--clr-text-faint); margin: 0 0 8px 0; font-weight: 500;">
-            Created by <span style="color: var(--clr-text-muted); font-weight: 600;">Vinayaka</span>
-          </p>
-          <div style="display: flex; gap: 12px; margin-top: 8px;">
-            <a href="https://ko-fi.com/vinayaka" target="_blank" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 13px; padding: 6px 16px;">
-              Support on Ko-fi
-            </a>
-            <a href="https://github.com/vinayakawac/CincoScribe" target="_blank" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 13px; padding: 6px 16px;">
-              GitHub Repository
-            </a>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--clr-border);">
+            <div>
+              <p style="font-size: 12px; color: var(--clr-text-muted); margin: 0;">Developed by <strong style="color: var(--clr-text);">Vinayaka</strong></p>
+              <p style="font-size: 11px; color: var(--clr-text-muted); margin: 2px 0 0 0;">Licensed under MIT License • 100% Free & Open Source</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <a href="https://ko-fi.com/vinayaka" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 7px 16px; text-decoration: none;">
+                Support on Ko-fi
+              </a>
+              <a href="https://github.com/vinayakawac/CincoScribe" target="_blank" class="btn btn-secondary" style="font-size: 12px; padding: 7px 16px; text-decoration: none;">
+                GitHub Repo
+              </a>
+            </div>
           </div>
-          <p style="font-size: 11px; color: var(--clr-text-faint); margin-top: var(--sp-4);">Licensed under MIT License • 100% Offline & Private</p>
         </div>
       `;
     }
@@ -510,7 +718,7 @@ async function renderSettingsPage(container) {
     if (startServerBtn) {
       startServerBtn.addEventListener('click', async () => {
         startServerBtn.disabled = true;
-        startServerBtn.textContent = 'Restarting...';
+        startServerBtn.textContent = 'Starting...';
         if (window.electronAPI && window.electronAPI.startSidecar) {
           await window.electronAPI.startSidecar();
         }
@@ -541,7 +749,7 @@ async function renderSettingsPage(container) {
     }
 
     // Tab switching
-    container.querySelectorAll('.settings-tab-btn[data-tab]').forEach(btn => {
+    container.querySelectorAll('.settings-nav-pill[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         activeTab = btn.getAttribute('data-tab');
         if (activeTab === 'gpu') {

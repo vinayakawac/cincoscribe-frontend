@@ -25,21 +25,29 @@ class SherpaTTS(TTSBackend):
         # Auto-download
         if not (self.model_path / "model.onnx").exists():
             logger.info(f"Downloading Kokoro ONNX model to {self.model_path}...")
-            from huggingface_hub import snapshot_download
-            snapshot_download(
-                repo_id="csukuangfj/kokoro-en-v0_19",
-                local_dir=str(self.model_path),
-                allow_patterns=["*.onnx", "*.bin", "*.txt", "espeak-ng-data/*"]
-            )
+            try:
+                from huggingface_hub import snapshot_download
+                snapshot_download(
+                    repo_id="csukuangfj/kokoro-en-v0_19",
+                    local_dir=str(self.model_path),
+                    allow_patterns=["*.onnx", "*.bin", "*.txt", "espeak-ng-data/*"]
+                )
+            except Exception as e:
+                if not (self.model_path / "model.onnx").exists():
+                    raise EngineError(f"Network error downloading Kokoro ONNX model: {e}") from e
 
         if not (self.model_path / "voices.bin").exists():
             logger.info(f"Downloading Kokoro voices.bin to {self.model_path}...")
-            from huggingface_hub import hf_hub_download
-            hf_hub_download(
-                repo_id="csukuangfj/kokoro-en-v0_19",
-                filename="voices.bin",
-                local_dir=str(self.model_path)
-            )
+            try:
+                from huggingface_hub import hf_hub_download
+                hf_hub_download(
+                    repo_id="csukuangfj/kokoro-en-v0_19",
+                    filename="voices.bin",
+                    local_dir=str(self.model_path)
+                )
+            except Exception as e:
+                if not (self.model_path / "voices.bin").exists():
+                    raise EngineError(f"Network error downloading Kokoro voices.bin: {e}") from e
 
         # Check ONNX Runtime GPU support
         from services.cuda_backend import is_cuda_active

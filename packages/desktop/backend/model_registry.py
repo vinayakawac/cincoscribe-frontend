@@ -16,6 +16,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Standard allow_patterns for faster-whisper CTranslate2 models
+ASR_ALLOW_PATTERNS = ["*.json", "*.bin", "*.txt", "*.model", "vocabulary.*", "tokenizer.*"]
+
 # ── Static registry — all known ASR and Voice/TTS models ─────────────────────
 
 MODEL_REGISTRY: dict[str, dict] = {
@@ -24,6 +27,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-tiny",
         "folder": "models--Systran--faster-whisper-tiny",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 78 * 1024 * 1024,
         "size_label": "~78 MB",
         "default_compute_type": "int8",
@@ -34,6 +38,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-base",
         "folder": "models--Systran--faster-whisper-base",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 281 * 1024 * 1024,
         "size_label": "~281 MB",
         "default_compute_type": "int8",
@@ -44,6 +49,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-small",
         "folder": "models--Systran--faster-whisper-small",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 922 * 1024 * 1024,
         "size_label": "~922 MB",
         "default_compute_type": "int8",
@@ -54,6 +60,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-medium",
         "folder": "models--Systran--faster-whisper-medium",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 1500 * 1024 * 1024,
         "size_label": "~1.5 GB",
         "default_compute_type": "int8",
@@ -64,6 +71,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "Systran/faster-whisper-large-v3",
         "folder": "models--Systran--faster-whisper-large-v3",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 3000 * 1024 * 1024,
         "size_label": "~3.0 GB",
         "default_compute_type": "float16",
@@ -74,6 +82,7 @@ MODEL_REGISTRY: dict[str, dict] = {
         "category": "asr",
         "repo_id": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "folder": "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo",
+        "allow_patterns": ASR_ALLOW_PATTERNS,
         "size_bytes": 1600 * 1024 * 1024,
         "size_label": "~1.6 GB",
         "default_compute_type": "float16",
@@ -210,6 +219,7 @@ def _blank_state() -> dict:
         "compute_type":     None,
         "device":           None,
         "mem_freed_bytes":  None,
+        "tqdm_bars":        {},     # bar_id -> dict(n=int, total=int)
         # internal — never serialised to API
         "_cancel_event":    None,
     }
@@ -293,29 +303,48 @@ class ModelRegistry:
     def set_downloading(self, model_id: str, cancel_event: threading.Event) -> None:
         with self._lock:
             s = self._state[model_id]
-            s["status"]        = STATUS_DOWNLOADING
-            s["progress"]      = 0.0
+            s["status"]           = STATUS_DOWNLOADING
+            s["progress"]         = 0.0
             s["bytes_downloaded"] = 0
-            s["bytes_total"]   = MODEL_REGISTRY[model_id]["size_bytes"]
-            s["speed_bps"]     = 0.0
-            s["error"]         = None
-            s["_cancel_event"] = cancel_event
+            s["bytes_total"]      = MODEL_REGISTRY[model_id]["size_bytes"]
+            s["speed_bps"]        = 0.0
+            s["error"]            = None
+            s["tqdm_bars"]        = {}
+            s["_cancel_event"]    = cancel_event
 
-    def update_progress(
+    def update_tqdm_bar(
         self,
         model_id: str,
-        bytes_downloaded: int,
-        bytes_total: int,
+        bar_id: int,
+        n_current: int,
+        total_bytes: Optional[int],
         speed_bps: float,
     ) -> None:
         with self._lock:
             s = self._state[model_id]
-            s["bytes_downloaded"] = bytes_downloaded
-            if bytes_total:
-                s["bytes_total"] = bytes_total
-            total = s["bytes_total"] or 1
-            s["progress"]  = min(0.99, bytes_downloaded / total)
-            s["speed_bps"] = speed_bps
+            if s["status"] != STATUS_DOWNLOADING:
+                return
+
+            bars = s.setdefault("tqdm_bars", {})
+            bars[bar_id] = {
+                "n": n_current,
+                "total": total_bytes or 0,
+            }
+
+            sum_downloaded = sum(b["n"] for b in bars.values())
+            sum_totals = sum(b["total"] for b in bars.values() if b["total"] > 0)
+
+            meta_expected = MODEL_REGISTRY[model_id].get("size_bytes", 1)
+            s["bytes_downloaded"] = sum_downloaded
+            s["bytes_total"]      = max(meta_expected, sum_totals, sum_downloaded)
+
+            if s["bytes_total"] > 0:
+                s["progress"] = min(0.99, s["bytes_downloaded"] / s["bytes_total"])
+            else:
+                s["progress"] = 0.0
+
+            if speed_bps > 0:
+                s["speed_bps"] = speed_bps
 
     def add_download_bytes(self, model_id: str, delta_bytes: int, speed_bps: float) -> None:
         with self._lock:
@@ -323,9 +352,9 @@ class ModelRegistry:
             if s["status"] != STATUS_DOWNLOADING:
                 return
             s["bytes_downloaded"] += delta_bytes
-            total = max(s["bytes_total"] or 0, MODEL_REGISTRY[model_id].get("size_bytes", 1), s["bytes_downloaded"])
-            s["bytes_total"] = total
-            s["progress"] = min(0.99, s["bytes_downloaded"] / total)
+            meta_expected = MODEL_REGISTRY[model_id].get("size_bytes", 1)
+            s["bytes_total"] = max(meta_expected, s["bytes_downloaded"])
+            s["progress"] = min(0.99, s["bytes_downloaded"] / s["bytes_total"])
             s["speed_bps"] = speed_bps
 
     def get_any_downloading_model_id(self) -> Optional[str]:

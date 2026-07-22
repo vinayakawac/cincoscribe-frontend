@@ -130,9 +130,19 @@ class FasterWhisperASR(ASRBackend):
                     compute_type=compute_type,
                     download_root=str(self.models_dir),
                     cpu_threads=4,
+                    local_files_only=True,
                 )
             except Exception as exc:
-                raise EngineError(f"Failed to load Whisper model {model_size}: {exc}") from exc
+                try:
+                    model = WhisperModel(
+                        local_path,
+                        device=device,
+                        compute_type=compute_type,
+                        download_root=str(self.models_dir),
+                        cpu_threads=4,
+                    )
+                except Exception:
+                    raise EngineError(f"Failed to load Whisper model {model_size}: {exc}") from exc
 
             self._model = model
             self._current_size = model_size

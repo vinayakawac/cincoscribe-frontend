@@ -149,6 +149,14 @@ if _TQDM_AVAILABLE:
                 or getattr(self, "unit_scale", False)
                 or (self.total is not None and self.total > 1024)
             )
+            if self._model_id and self._is_byte_tqdm:
+                registry.update_tqdm_bar(
+                    self._model_id,
+                    id(self),
+                    getattr(self, "n", 0),
+                    getattr(self, "total", 0),
+                    0.0,
+                )
 
         def update(self, n: int = 1) -> None:
             cancel_evt = self._cancel_event or getattr(thread_local, "active_cancel_event", None)
@@ -158,7 +166,13 @@ if _TQDM_AVAILABLE:
             model_id = self._model_id or getattr(thread_local, "active_model_id", None)
             if model_id and self._is_byte_tqdm:
                 rate = self.format_dict.get("rate") or 0.0
-                registry.add_download_bytes(model_id, n, float(rate))
+                registry.update_tqdm_bar(
+                    model_id,
+                    id(self),
+                    getattr(self, "n", 0),
+                    getattr(self, "total", 0),
+                    float(rate),
+                )
 else:
     CancellableTqdm = None  # type: ignore[assignment,misc]
 
@@ -197,7 +211,25 @@ def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
         if CancellableTqdm is not None:
             kwargs["tqdm_class"] = CancellableTqdm
 
-        snapshot_download(**kwargs)
+        try:
+            snapshot_download(**kwargs)
+        except Exception as net_err:
+            # Check if local snapshot already exists on disk when network/DNS fails
+            snapshots_dir = dest_dir / "snapshots"
+            has_local = (
+                (dest_dir.is_dir() and any(dest_dir.iterdir()))
+                if meta.get("local_dir")
+                else (snapshots_dir.is_dir() and any(p.is_dir() for p in snapshots_dir.iterdir()))
+            )
+            if has_local:
+                logger.info("[models] Network offline/unavailable (%s); loading from local disk for %s", net_err, model_id)
+                kwargs["local_files_only"] = True
+                snapshot_download(**kwargs)
+            else:
+                err_msg = str(net_err)
+                if "getaddrinfo failed" in err_msg or "ConnectError" in err_msg or "ConnectionError" in err_msg:
+                    err_msg = f"Network offline or DNS error connecting to Hugging Face Hub for '{model_id}'. Please check internet connection and try again."
+                raise RuntimeError(err_msg) from net_err
 
         if cancel_event.is_set():
             raise InterruptedError("Download cancelled by user")
@@ -255,13 +287,23 @@ def _load_whisper(model_id: str, local_path: str, device: str, compute_type: str
     for dev, ct in attempts:
         try:
             logger.info("[models] Loading %s on %s/%s", model_id, dev, ct)
-            model = WhisperModel(
-                local_path,
-                device=dev,
-                compute_type=ct,
-                download_root=str(config.models_dir),
-                cpu_threads=4,
-            )
+            try:
+                model = WhisperModel(
+                    local_path,
+                    device=dev,
+                    compute_type=ct,
+                    download_root=str(config.models_dir),
+                    cpu_threads=4,
+                    local_files_only=True,
+                )
+            except Exception:
+                model = WhisperModel(
+                    local_path,
+                    device=dev,
+                    compute_type=ct,
+                    download_root=str(config.models_dir),
+                    cpu_threads=4,
+                )
             if (dev, ct) != (device, compute_type):
                 logger.warning(
                     "[models] OOM fallback for %s: using %s/%s instead of %s/%s",

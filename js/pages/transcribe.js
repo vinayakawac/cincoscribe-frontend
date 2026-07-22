@@ -1,8 +1,18 @@
 /* ===== Transcribe Page — Real Whisper Transcription ===== */
 
 function renderTranscribePage(container) {
-  let selectedFile = null;
+  let selectedFile = AppState.selectedAudioFile || null;
   let fileDuration = 0;
+
+  if (AppState.selectedAudioFile) {
+    AppState.selectedAudioFile = null;
+    const audio = document.createElement('audio');
+    audio.src = URL.createObjectURL(selectedFile);
+    audio.addEventListener('loadedmetadata', () => {
+      fileDuration = audio.duration;
+      render();
+    });
+  }
   const WASM_MODELS = [
     { id: 'fast',     name: 'Whisper Tiny' },
     { id: 'accuracy', name: 'Whisper Base' },
@@ -205,20 +215,25 @@ function renderTranscribePage(container) {
 
   function renderProgress() {
     return `
-      <div class="transcript-panel" style="margin-top: 10px; border: none; padding: 0; background: transparent;">
-        <div class="progress-container" id="progress-area" style="padding: 0;">
-          <div class="progress-bar-wrapper">
-            <div class="progress-bar-fill" id="progress-bar" style="width:${progressPct}%"></div>
+      <div style="background: var(--clr-bg-subtle); border: 1px solid var(--clr-border); border-radius: var(--radius-xl); padding: 18px 20px; margin-top: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="spinner-sm" style="display: inline-block; width: 14px; height: 14px; border: 2px solid var(--clr-primary); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+            <span id="progress-status" style="font-size: 13px; font-weight: 600; color: var(--clr-text);">${statusMessage || 'Preparing...'}</span>
           </div>
-          <p class="progress-label" id="progress-status">${statusMessage || 'Preparing...'}</p>
-          <p class="progress-percent" id="progress-pct">${Math.round(progressPct)}%</p>
+          <span id="progress-pct" style="font-size: 13px; font-weight: 700; font-family: var(--ff-mono); color: var(--clr-primary);">${Math.round(progressPct)}%</span>
         </div>
+
+        <div style="height: 8px; background: rgba(255,255,255,0.08); border-radius: var(--radius-full); overflow: hidden; width: 100%;">
+          <div id="progress-bar" style="width:${progressPct}%; height: 100%; border-radius: var(--radius-full); background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width 300ms ease;"></div>
+        </div>
+
         ${liveTranscript.length > 0 ? `
-        <div class="live-transcript-box" style="border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-lg); padding: 12px 14px; margin-top: 8px;">
-          <div class="live-transcript-header" style="font-size: 11px; margin-bottom: 6px; color: var(--clr-primary);">
-            <span style="display:flex;align-items:center; gap: 4px;">${Utils.icons.bolt} Transcribing live...</span>
+        <div class="live-transcript-box" style="border: 1px solid rgba(255,255,255,0.08); background: var(--clr-surface-raised, #262626); border-radius: var(--radius-lg); padding: 12px 14px; margin-top: 4px;">
+          <div class="live-transcript-header" style="font-size: 11px; margin-bottom: 6px; color: var(--clr-primary); font-weight: 700;">
+            <span style="display:flex;align-items:center; gap: 4px;">${Utils.icons.bolt} Live Stream Transcription</span>
           </div>
-          <div class="live-transcript-content" id="live-transcript-content" style="font-size: 13px; max-height: 120px; overflow-y: auto; line-height: 1.5; color: var(--clr-text-muted);">
+          <div class="live-transcript-content" id="live-transcript-content" style="font-size: 13px; max-height: 120px; overflow-y: auto; line-height: 1.5; color: var(--clr-text-muted); font-family: var(--ff-mono);">
             ${escapeHtml(liveTranscript.map(c => c.text).join(' '))}
             <span class="live-transcript-cursor"></span>
           </div>
