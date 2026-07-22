@@ -13,8 +13,9 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
 const Store = require('electron-store');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const crypto = require('crypto');
 const log = require('electron-log/main');
 const { SIDECAR_PORT } = require('@cincoscribe/core');
@@ -67,13 +68,23 @@ function createMainWindow() {
  * Other platforms: `python3`.
  */
 function pythonExe() {
-  return process.platform === 'win32' ? 'py' : 'python3';
+  if (process.platform === 'win32') {
+    try {
+      execSync('where py', { stdio: 'ignore' });
+      return 'py';
+    } catch (e) {}
+    try {
+      execSync('where python', { stdio: 'ignore' });
+      return 'python';
+    } catch (e) {}
+    return 'py';
+  }
+  return 'python3';
 }
 
 /**
  * Spawn the FastAPI sidecar.
- * Sidecar path: packages/desktop/backend/server.py
- * Managed by uv (uv run server.py).
+ * Sidecar path: packages/desktop/backend/main.py
  */
 function killPort(port) {
   if (process.platform === 'win32') {
@@ -97,10 +108,23 @@ function killPort(port) {
 function spawnSidecar() {
   killPort(SIDECAR_PORT);
 
-  const backendDir = path.join(__dirname, 'backend');
+  const isPackaged = app.isPackaged;
+  const unpackedBackendDir = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend');
+  const resourcesBackendDir = path.join(process.resourcesPath, 'backend');
+  const devBackendDir = path.join(__dirname, 'backend');
+
+  let backendDir = devBackendDir;
+  if (isPackaged) {
+    if (fs.existsSync(unpackedBackendDir)) {
+      backendDir = unpackedBackendDir;
+    } else if (fs.existsSync(resourcesBackendDir)) {
+      backendDir = resourcesBackendDir;
+    }
+  }
+
   const serverScript = path.join(backendDir, 'main.py');
 
-  const currentModelsDir = store.get('modelsDir') || path.join(__dirname, '..', '..', '.models');
+  const currentModelsDir = store.get('modelsDir') || (isPackaged ? path.join(app.getPath('userData'), 'models') : path.join(__dirname, '..', '..', '.models'));
   const cudaDir = path.join(currentModelsDir, '..', 'backends', 'cuda');
   const cudaBinaryName = process.platform === 'win32' ? 'cincoscribe-server.exe' : 'cincoscribe-server';
   const cudaBinary = path.join(cudaDir, cudaBinaryName);
@@ -113,8 +137,33 @@ function spawnSidecar() {
     cmd = cudaBinary;
     args = [];
   } else {
-    cmd = 'uv';
-    args = ['run', serverScript];
+    const venvPython = process.platform === 'win32'
+      ? path.join(backendDir, '.venv', 'Scripts', 'python.exe')
+      : path.join(backendDir, '.venv', 'bin', 'python');
+
+    let hasUv = false;
+    try {
+      execSync(process.platform === 'win32' ? 'where uv' : 'which uv', { stdio: 'ignore' });
+      hasUv = true;
+    } catch (e) {}
+
+    const venvValid = fs.existsSync(venvPython) && (
+      fs.existsSync(path.join(backendDir, '.venv', 'Lib', 'site-packages', 'fastapi')) ||
+      fs.existsSync(path.join(backendDir, '.venv', 'lib', 'python3.12', 'site-packages', 'fastapi')) ||
+      fs.existsSync(path.join(backendDir, '.venv', 'lib', 'python3.11', 'site-packages', 'fastapi')) ||
+      fs.existsSync(path.join(backendDir, '.venv', 'lib', 'python3.10', 'site-packages', 'fastapi'))
+    );
+
+    if (hasUv) {
+      cmd = 'uv';
+      args = ['run', serverScript];
+    } else if (venvValid) {
+      cmd = venvPython;
+      args = [serverScript];
+    } else {
+      cmd = pythonExe();
+      args = [serverScript];
+    }
   }
 
   log.info(`[sidecar] Spawning (${useCuda ? 'CUDA' : 'CPU'}): ${cmd} ${args.join(' ')}`);
@@ -130,7 +179,8 @@ function spawnSidecar() {
       CINCOSCRIBE_MODELS_DIR: currentModelsDir,
       VOICEBOX_MODELS_DIR: currentModelsDir,
       CINCOSCRIBE_BACKEND_VARIANT: useCuda ? 'cuda' : 'cpu',
-      SIDECAR_TOKEN: SIDECAR_TOKEN
+      SIDECAR_TOKEN: SIDECAR_TOKEN,
+      UV_LINK_MODE: 'copy'
     }
   });
 
@@ -216,7 +266,7 @@ app.whenReady().then(() => {
 async function syncModelsDirectory() {
   const currentDir = store.get('modelsDir');
   log.info(`[main] Syncing models directory with sidecar: ${currentDir}`);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 35; i++) {
     try {
       const res = await fetch(`http://127.0.0.1:${SIDECAR_PORT}/health`, {
         headers: { 'X-Sidecar-Token': SIDECAR_TOKEN }
@@ -239,7 +289,7 @@ async function syncModelsDirectory() {
         break;
       }
     } catch (e) {
-      log.info(`[main] Waiting for sidecar health... (${i + 1}/10)`);
+      log.info(`[main] Waiting for sidecar health... (${i + 1}/35)`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
@@ -326,23 +376,24 @@ ipcMain.handle('set-backend-variant', async (_event, variant) => {
   return { success: true };
 });
 
+ipcMain.handle('start-sidecar', async () => {
+  log.info('[main] Manually starting sidecar process...');
+  killSidecar();
+  await new Promise(r => setTimeout(r, 600));
+  spawnSidecar();
+  return { success: true };
+});
+
 ipcMain.handle('restart-sidecar', async (_event, newModelsDir) => {
-  log.info(`[main] Updating sidecar models path: ${newModelsDir}`);
-  store.set('modelsDir', newModelsDir);
-  try {
-    const res = await sidecarFetch('/settings/models-dir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ models_dir: newModelsDir })
-    });
-    return { success: true, res };
-  } catch (err) {
-    log.warn('[main] Dynamic modelsDir update failed, restarting sidecar process...', err.message);
-    killSidecar();
-    await new Promise(r => setTimeout(r, 1000));
-    spawnSidecar();
-    return { success: true };
+  if (typeof newModelsDir === 'string' && newModelsDir.length > 0) {
+    log.info(`[main] Updating sidecar models path: ${newModelsDir}`);
+    store.set('modelsDir', newModelsDir);
   }
+  log.info('[main] Restarting sidecar process...');
+  killSidecar();
+  await new Promise(r => setTimeout(r, 800));
+  spawnSidecar();
+  return { success: true };
 });
 
 ipcMain.handle('open-path', async (_event, targetPath) => {

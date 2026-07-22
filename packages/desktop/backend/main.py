@@ -58,16 +58,22 @@ try:
 except Exception as e:
     logger.warning(f"CUDA startup check error: {e}")
 
-# GPU Detection
-try:
-    import torch  # type: ignore
-    if torch.cuda.is_available():
-        gpu_name = torch.cuda.get_device_name(0)
-        logger.info(f"GPU: CUDA ({gpu_name})")
-    else:
-        logger.info("GPU: None (CPU only)")
-except ImportError:
-    logger.info("GPU: Torch not installed (CPU only)")
+# GPU Detection (deferred / non-blocking)
+def _detect_gpu_async():
+    try:
+        import importlib
+        if importlib.util.find_spec("torch") is not None:
+            torch = importlib.import_module("torch")
+            if getattr(torch.cuda, "is_available", lambda: False)():
+                gpu_name = torch.cuda.get_device_name(0)
+                logger.info(f"GPU: CUDA ({gpu_name})")
+                return
+    except Exception:
+        pass
+    logger.info("GPU: CPU mode")
+
+import threading
+threading.Thread(target=_detect_gpu_async, daemon=True).start()
 
 variant = "CUDA" if is_cuda_active() else "CPU"
 logger.info(f"Active backend variant: {variant}")

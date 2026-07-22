@@ -212,24 +212,8 @@ async def download_and_install_cuda_backend(force: bool = False) -> Dict[str, An
         return get_cuda_status()
 
 def check_and_update_cuda_binary():
-    # Only run an update check when the binary is already present.
-    # If no binary exists yet the user must explicitly click "Download GPU Backend"
-    # in Settings → GPU. This prevents 404 noise on every startup when the
-    # release assets haven't been published.
-    binary_path = get_cuda_binary_path()
-    if not binary_path.exists():
-        return
-        
-    needs_server = _needs_server_download()
-    needs_libs = _needs_cuda_libs_download()
-    
-    if needs_server or needs_libs:
-        logger.info(f"Startup CUDA update trigger: server={needs_server}, libs={needs_libs}")
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(download_and_install_cuda_backend())
-        except RuntimeError:
-            asyncio.run(download_and_install_cuda_backend())
+    # Automatic startup downloads disabled. Downloads must be explicitly triggered by the user in Settings -> GPU.
+    return
 
 def delete_cuda_binary() -> bool:
     cuda_dir = get_cuda_dir()

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFileDialog: (opts)     => ipcRenderer.invoke('save-file-dialog', opts),
   selectDirectory:()         => ipcRenderer.invoke('select-directory'),
   restartSidecar: (newPath)  => ipcRenderer.invoke('restart-sidecar', newPath),
+  startSidecar:   ()         => ipcRenderer.invoke('start-sidecar'),
   setBackendVariant: (varnt) => ipcRenderer.invoke('set-backend-variant', varnt),
   openPath:       (target)   => ipcRenderer.invoke('open-path', target),
 

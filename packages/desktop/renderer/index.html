@@ -24,6 +24,28 @@
 </head>
 
 <body>
+  <!-- ═══════════════ Startup Loading Screen Overlay ═══════════════ -->
+  <div id="splash-screen" style="position: fixed; inset: 0; z-index: 999999; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 400ms ease, visibility 400ms ease;">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 24px; max-width: 340px; width: 85%; text-align: center;">
+      <!-- Logo layout matching Image 2 (Icon + CincoScribe matching dashboard logo) -->
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 10px 24px rgba(0,0,0,0.5); overflow: hidden;">
+          <img src="cincoscribe.png" alt="CincoScribe" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">
+        </div>
+        <span style="font-family: var(--ff-mono, monospace); font-size: 25px; letter-spacing: -0.02em; white-space: nowrap; line-height: 1;">
+          <span style="color: #a0a0a0; font-weight: 500;">Cinco</span><span style="color: #ffffff; font-weight: 800;">Scribe</span>
+        </span>
+      </div>
+
+      <div style="width: 100%;">
+        <p id="splash-status" style="font-size: 12px; color: #888; margin: 0 0 12px 0; font-family: var(--ff-sans); line-height: 1.4;">Connecting to local backend...</p>
+        <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; position: relative;">
+          <div id="splash-progress" style="height: 100%; width: 10%; background: linear-gradient(90deg, #d97706, #f59e0b); border-radius: 2px; transition: width 200ms ease-out;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="app-shell">
 
     <!-- ═══════════════ Desktop Icon Rail ═══════════════ -->
@@ -377,6 +399,69 @@
 
       Sidebar.init();
       Router.init();
+
+      // ── Startup Splash & Backend Health Check ──────────
+      (function checkStartupBackend() {
+        const splash = document.getElementById('splash-screen');
+        const progressBar = document.getElementById('splash-progress');
+        const statusText = document.getElementById('splash-status');
+
+        if (!splash || !progressBar) return;
+
+        const TOTAL_LOADING_TIME = 9000; // 9 seconds duration
+        const startTime = Date.now();
+
+        // Perform backend health check in background
+        async function pingBackend() {
+          try {
+            let port = 5555;
+            if (window.electronAPI && window.electronAPI.getSidecarPort) {
+              port = await window.electronAPI.getSidecarPort();
+            }
+            let token = '';
+            if (window.electronAPI && window.electronAPI.getSidecarToken) {
+              try { token = await window.electronAPI.getSidecarToken(); } catch (e) {}
+            }
+            const headers = token ? { 'X-Sidecar-Token': token } : {};
+            const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '127.0.0.1' : (window.location.hostname || 'localhost');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1000);
+            await fetch(`http://${hostname}:${port}/health`, { headers, signal: controller.signal });
+            clearTimeout(timeoutId);
+          } catch (e) {}
+        }
+
+        pingBackend();
+        const healthInterval = setInterval(pingBackend, 1500);
+
+        const progressInterval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          const pct = Math.min(100, Math.floor((elapsed / TOTAL_LOADING_TIME) * 100));
+          progressBar.style.width = pct + '%';
+
+          if (pct < 35) {
+            if (statusText) statusText.textContent = 'Connecting to local backend...';
+          } else if (pct < 70) {
+            if (statusText) statusText.textContent = 'Initializing Whisper & TTS engines...';
+          } else if (pct < 95) {
+            if (statusText) statusText.textContent = 'Loading interface components...';
+          } else {
+            if (statusText) statusText.textContent = 'Backend ready';
+          }
+
+          if (elapsed >= TOTAL_LOADING_TIME) {
+            clearInterval(progressInterval);
+            clearInterval(healthInterval);
+            progressBar.style.width = '100%';
+            if (statusText) statusText.textContent = 'Backend ready';
+            setTimeout(() => {
+              splash.style.opacity = '0';
+              splash.style.visibility = 'hidden';
+              setTimeout(() => { splash.style.display = 'none'; }, 400);
+            }, 300);
+          }
+        }, 50);
+      })();
 
       // ── Theme toggle ────────────────────────────────────
       const themeToggle = document.getElementById('btn-theme-toggle');

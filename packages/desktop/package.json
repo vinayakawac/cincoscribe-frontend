@@ -35,11 +35,30 @@
     "win": {
       "target": "nsis"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "LICENSE",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!.venv/**",
+          "!**/.venv/**"
+        ]
+      }
+    ],
     "files": [
       "**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!backend/**/__pycache__/**",
-      "!backend/**/*.pyc"
+      "!backend/**",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
     ]
   }
 }

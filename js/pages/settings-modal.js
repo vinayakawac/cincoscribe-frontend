@@ -68,13 +68,18 @@ async function renderSettingsPage(container) {
   async function checkServerHealth() {
     try {
       let port = 5555;
-      if (window.electronAPI) {
+      if (window.electronAPI && window.electronAPI.getSidecarPort) {
         port = await window.electronAPI.getSidecarPort();
       }
+      let token = '';
+      if (window.electronAPI && window.electronAPI.getSidecarToken) {
+        try { token = await window.electronAPI.getSidecarToken(); } catch (e) {}
+      }
+      const headers = token ? { 'X-Sidecar-Token': token } : {};
       const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '127.0.0.1' : (window.location.hostname || 'localhost');
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 600);
-      const res = await fetch(`http://${hostname}:${port}/health`, { signal: controller.signal });
+      const res = await fetch(`http://${hostname}:${port}/health`, { headers, signal: controller.signal });
       clearTimeout(timeoutId);
       isServerOnline = res.ok;
     } catch (e) {
@@ -297,18 +302,29 @@ async function renderSettingsPage(container) {
             <h4 class="setting-label">Server URL</h4>
             <p class="setting-desc">The address of your CincoScribe sidecar backend server.</p>
           </div>
-          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); width: 40%; min-width: 200px;">
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); width: 45%; min-width: 220px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
               <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: ${isServerOnline ? '#10b981' : '#ef4444'};"></span>
               <span style="color: ${isServerOnline ? '#10b981' : '#ef4444'};">${isServerOnline ? 'Online' : 'Offline'}</span>
             </div>
-            <input
-              id="settings-server-url"
-              type="text"
-              value="http://127.0.0.1:5555"
-              disabled
-              style="width: 100%; padding: 6px 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); color: var(--clr-text-muted); border-radius: var(--radius); font-size: 12px; font-family: var(--ff-mono);"
-            />
+            <div style="display: flex; align-items: center; width: 100%; height: 32px; box-sizing: border-box;">
+              <input
+                id="settings-server-url"
+                type="text"
+                value="http://127.0.0.1:5555"
+                disabled
+                style="flex: 1; height: 32px; min-height: 32px; box-sizing: border-box; padding: 0 10px; background: var(--clr-bg); border: 1px solid var(--clr-border); border-right: none; color: var(--clr-text-muted); border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); border-top-right-radius: 0; border-bottom-right-radius: 0; font-size: 11px; font-family: var(--ff-mono); margin: 0; outline: none;"
+              />
+              ${isServerOnline ? `
+                <button id="btn-restart-server" class="btn btn-secondary" title="Restart Server" style="height: 32px !important; min-height: 32px !important; box-sizing: border-box; padding: 0 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); margin: 0; border: 1px solid var(--clr-border); color: var(--clr-text, #ffffff) !important; background: var(--clr-bg-subtle, #1d1d1d) !important; cursor: pointer; transform: none !important; transition: background 150ms ease !important; animation: none !important;" aria-label="Restart Server">
+                  Restart Server
+                </button>
+              ` : `
+                <button id="btn-start-server" class="btn btn-primary" title="Restart Server" style="height: 32px !important; min-height: 32px !important; box-sizing: border-box; padding: 0 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); margin: 0; color: oklch(0.10 0.01 255) !important; cursor: pointer; transform: none !important; transition: background 150ms ease !important; animation: none !important;" aria-label="Restart Server">
+                  Restart Server
+                </button>
+              `}
+            </div>
           </div>
         </div>
 
@@ -489,6 +505,41 @@ async function renderSettingsPage(container) {
   }
 
   function bindEvents() {
+    // Server Control Actions
+    const startServerBtn = document.getElementById('btn-start-server');
+    if (startServerBtn) {
+      startServerBtn.addEventListener('click', async () => {
+        startServerBtn.disabled = true;
+        startServerBtn.textContent = 'Restarting...';
+        if (window.electronAPI && window.electronAPI.startSidecar) {
+          await window.electronAPI.startSidecar();
+        }
+        for (let i = 0; i < 15; i++) {
+          await new Promise(r => setTimeout(r, 200));
+          await checkServerHealth();
+          if (isServerOnline) break;
+        }
+        render();
+      });
+    }
+
+    const restartServerBtn = document.getElementById('btn-restart-server');
+    if (restartServerBtn) {
+      restartServerBtn.addEventListener('click', async () => {
+        restartServerBtn.disabled = true;
+        restartServerBtn.textContent = 'Restarting...';
+        if (window.electronAPI && window.electronAPI.restartSidecar) {
+          await window.electronAPI.restartSidecar();
+        }
+        for (let i = 0; i < 15; i++) {
+          await new Promise(r => setTimeout(r, 200));
+          await checkServerHealth();
+          if (isServerOnline) break;
+        }
+        render();
+      });
+    }
+
     // Tab switching
     container.querySelectorAll('.settings-tab-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
