@@ -417,6 +417,24 @@ async function sidecarFetch(path, opts = {}) {
   return body;
 }
 
+ipcMain.handle('models:getAll', async () => {
+  try {
+    return await sidecarFetch('/models', { method: 'GET' });
+  } catch (err) {
+    log.error('[main] models:getAll error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('models:downloadStatus', async (_e, modelId) => {
+  try {
+    return await sidecarFetch(`/models/${encodeURIComponent(modelId)}/download/status`, { method: 'GET' });
+  } catch (err) {
+    log.error('[main] models:downloadStatus error:', err.message);
+    return { error: err.message };
+  }
+});
+
 ipcMain.handle('models:download', async (_e, modelId) => {
   try {
     return await sidecarFetch(`/models/${encodeURIComponent(modelId)}/download`, { method: 'POST' });
@@ -460,3 +478,106 @@ ipcMain.handle('models:unload', async (_e, modelId) => {
     return { error: err.message };
   }
 });
+
+// ── Voices IPC Handlers ────────────────────────────────────────────────────────
+ipcMain.handle('voices:create', async (_e, voiceData) => {
+  try {
+    return await sidecarFetch('/voices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(voiceData)
+    });
+  } catch (err) {
+    log.error('[main] voices:create error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:list', async () => {
+  try {
+    return await sidecarFetch('/voices', { method: 'GET' });
+  } catch (err) {
+    log.error('[main] voices:list error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:get', async (_e, voiceId) => {
+  try {
+    return await sidecarFetch(`/voices/${encodeURIComponent(voiceId)}`, { method: 'GET' });
+  } catch (err) {
+    log.error('[main] voices:get error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:update', async (_e, { voiceId, ...data }) => {
+  try {
+    return await sidecarFetch(`/voices/${encodeURIComponent(voiceId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch (err) {
+    log.error('[main] voices:update error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:delete', async (_e, voiceId) => {
+  try {
+    return await sidecarFetch(`/voices/${encodeURIComponent(voiceId)}`, { method: 'DELETE' });
+  } catch (err) {
+    log.error('[main] voices:delete error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:addSample', async (_e, { voiceId, filePath, referenceText }) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Sample file non-existent: ${filePath}`);
+    }
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer]);
+    formData.append('file', blob, fileName);
+    if (referenceText) {
+      formData.append('reference_text', referenceText);
+    }
+
+    const url = `http://127.0.0.1:${SIDECAR_PORT}/voices/${encodeURIComponent(voiceId)}/samples`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Sidecar-Token': SIDECAR_TOKEN },
+      body: formData
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+    return body;
+  } catch (err) {
+    log.error('[main] voices:addSample error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:getSamples', async (_e, voiceId) => {
+  try {
+    return await sidecarFetch(`/voices/${encodeURIComponent(voiceId)}/samples`, { method: 'GET' });
+  } catch (err) {
+    log.error('[main] voices:getSamples error:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('voices:deleteSample', async (_e, sampleId) => {
+  try {
+    return await sidecarFetch(`/voices/samples/${encodeURIComponent(sampleId)}`, { method: 'DELETE' });
+  } catch (err) {
+    log.error('[main] voices:deleteSample error:', err.message);
+    return { error: err.message };
+  }
+});
+

@@ -31,9 +31,12 @@ function renderModelsPage(container) {
   let modelList = [...STATIC_ASR_MODELS, ...STATIC_TTS_MODELS];
 
   async function getSidecarBaseUrl() {
-    let port = 3901;
+    let port = 5555;
     if (window.electronAPI && window.electronAPI.getSidecarPort) {
-      try { port = await window.electronAPI.getSidecarPort(); } catch (e) {}
+      try {
+        const p = await window.electronAPI.getSidecarPort();
+        if (p) port = p;
+      } catch (e) {}
     }
     const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? '127.0.0.1'
@@ -182,6 +185,15 @@ function renderModelsPage(container) {
 
   async function cancelDownload(modelId) {
     try {
+      const item = modelList.find(m => m.model_id === modelId);
+      if (item) {
+        item.status = 'not_downloaded';
+        item.progress = 0;
+        item.bytes_downloaded = 0;
+        item.speed_bps = 0;
+      }
+      updateDOMInPlace();
+
       if (window.electronAPI && window.electronAPI.modelsDownloadCancel) {
         await window.electronAPI.modelsDownloadCancel(modelId);
       } else {

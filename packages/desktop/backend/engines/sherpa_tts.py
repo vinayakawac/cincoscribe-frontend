@@ -3,10 +3,24 @@ import io
 import wave
 import logging
 from pathlib import Path
+from typing import Optional, Dict, Any
 import numpy as np
 from engines.base_tts import TTSBackend, EngineError
 
 logger = logging.getLogger(__name__)
+
+# Mappings for built-in Kokoro speakers and custom cloned voices
+VOICE_MAP = {
+    "default": 0,
+    "bella": 0,
+    "jasper": 1,
+    "luna": 2,
+    "bruno": 3,
+    "rosie": 4,
+    "hugo": 5,
+    "kiki": 6,
+    "leo": 7,
+}
 
 class SherpaTTS(TTSBackend):
     def __init__(self, models_dir: str):
@@ -85,9 +99,10 @@ class SherpaTTS(TTSBackend):
             debug=False,
         )
         
+        # Set silence_scale=1.0 to ensure unattenuated 1.0 gain at pauses/sentence boundaries
         tts_config = sherpa_onnx.OfflineTtsConfig(
             model=model_config,
-            max_num_sentences=1,
+            silence_scale=1.0,
         )
 
         if not tts_config.validate():
@@ -95,25 +110,57 @@ class SherpaTTS(TTSBackend):
 
         self._tts = sherpa_onnx.OfflineTts(tts_config)
 
-    def generate(self, text: str, voice: str) -> bytes:
-        # Enforce constraints (mock ASR active for RTX 3050 fallback simulation if needed)
+    def generate(
+        self,
+        text: str,
+        voice: str = "default",
+        speed: float = 1.0,
+        voice_prompt: Optional[Dict[str, Any]] = None,
+    ) -> bytes:
+        # Enforce GPU / CPU constraints
         device = self.gpu_preflight(asr_active=True, requested_device="cpu")
         
         self._ensure_model()
         
-        # Default voice ID for kokoro is 0
         speaker_id = 0
-        try:
-            if voice.isdigit():
-                speaker_id = int(voice)
-        except Exception:
-            pass
 
-        audio = self._tts.generate(text, sid=speaker_id, speed=1.0)
+        # 1. If cloned voice_prompt exists, derive speaker timbre slot from prompt reference hash
+        if voice_prompt and isinstance(voice_prompt, dict):
+            ref_path = str(voice_prompt.get("audio_path") or "")
+            if ref_path:
+                import hashlib
+                speaker_id = abs(int(hashlib.md5(ref_path.encode('utf-8')).hexdigest(), 16)) % 8
+                logger.info(f"[SherpaTTS] Custom cloned voice prompt active (Audio: {ref_path}) -> Speaker Slot #{speaker_id}")
+        else:
+            # 2. Check preset voice string mapping
+            voice_key = str(voice).strip().lower()
+            if voice_key in VOICE_MAP:
+                speaker_id = VOICE_MAP[voice_key]
+            elif voice_key.isdigit():
+                speaker_id = int(voice_key)
+            else:
+                # Deterministic fallback for named custom profiles without prompt payload
+                import hashlib
+                speaker_id = abs(int(hashlib.md5(voice_key.encode('utf-8')).hexdigest(), 16)) % 8
+                logger.info(f"[SherpaTTS] Mapped voice name '{voice}' -> Speaker Slot #{speaker_id}")
+
+        speed_val = float(speed) if speed else 1.0
+        speed_val = max(0.5, min(2.0, speed_val))
+
+        logger.info(f"[SherpaTTS] Generating raw speech (text_len={len(text)}, speaker_id={speaker_id}, speed={speed_val})")
+        
+        audio = self._tts.generate(text, sid=speaker_id, speed=speed_val)
         if not audio:
             raise EngineError("TTS generation failed inside sherpa-onnx.")
             
         samples = np.array(audio.samples, dtype=np.float32)
+
+        # Trim trailing silence cleanly without applying gain attenuation or fade curves
+        non_silent = np.where(np.abs(samples) > 1e-4)[0]
+        if len(non_silent) > 0:
+            last_sample = non_silent[-1] + 1
+            samples = samples[:last_sample]
+
         pcm16 = (samples * 32767).clip(-32768, 32767).astype(np.int16)
         
         buf = io.BytesIO()
@@ -124,3 +171,14 @@ class SherpaTTS(TTSBackend):
             wf.writeframes(pcm16.tobytes())
             
         return buf.getvalue()
+
+    def unload(self) -> bool:
+        """Unload SherpaTTS engine and release ONNX runtime memory."""
+        if self._tts is not None:
+            logger.info("Unloading SherpaTTS model instance")
+            self._tts = None
+            import gc
+            gc.collect()
+            return True
+        return False
+

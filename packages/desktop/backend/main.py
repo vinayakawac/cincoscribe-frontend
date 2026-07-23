@@ -44,11 +44,15 @@ from model_registry import registry as _model_registry
 _model_registry.scan_disk(models_dir)
 logger.info("Model registry disk scan complete")
 
+from database import init_db
+init_db()
+logger.info("Database initialized")
+
 logger.info("Importing routers and engine dependencies...")
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from router import health, tts, asr, models, merge, system
+from router import health, tts, asr, models, merge, system, profiles, voices
 from services.cuda_backend import check_and_update_cuda_binary, is_cuda_active
 logger.info("Backend imports successful")
 
@@ -89,7 +93,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["null", "http://localhost:*", "http://127.0.0.1:*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type", "X-Sidecar-Token"],
     expose_headers=[],
     max_age=3600,
@@ -98,11 +102,12 @@ app.add_middleware(
 
 @app.middleware("http")
 async def verify_sidecar_token(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path == "/health":
+        return await call_next(request)
+
     expected_token = os.environ.get("SIDECAR_TOKEN")
     if not expected_token:
-        return JSONResponse(status_code=503, content={"detail": "Sidecar launch token is unavailable"})
-
-    if request.method == "OPTIONS":
+        # Dev mode / standalone launch: bypass token validation if no token set in environment
         return await call_next(request)
 
     token = request.headers.get("x-sidecar-token")
@@ -118,6 +123,8 @@ app.include_router(asr.router)
 app.include_router(models.router)
 app.include_router(merge.router)
 app.include_router(system.router)
+app.include_router(voices.router)
+app.include_router(profiles.router)
 
 @app.get("/logs")
 def get_logs():

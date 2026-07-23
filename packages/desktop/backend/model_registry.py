@@ -153,15 +153,25 @@ MODEL_REGISTRY: dict[str, dict] = {
         "min_vram_mb": 0,
         "description": "Extremely fast and lightweight voice generation.",
     },
-    "chatterbox_tts": {
+    "chatterbox": {
         "category": "tts",
-        "repo_id": "Chatterbox/Chatterbox-TTS",
-        "folder": "models--Chatterbox--Chatterbox-TTS",
+        "repo_id": "ResembleAI/chatterbox",
+        "folder": "chatterbox",
         "size_bytes": 350 * 1024 * 1024,
         "size_label": "~350 MB",
         "default_compute_type": "int8",
         "min_vram_mb": 1024,
-        "description": "Natural sounding voice synthesis across multiple languages.",
+        "description": "Zero-shot voice cloning model from Resemble AI.",
+    },
+    "chatterbox_tts": {
+        "category": "tts",
+        "repo_id": "ResembleAI/chatterbox",
+        "folder": "chatterbox",
+        "size_bytes": 350 * 1024 * 1024,
+        "size_label": "~350 MB",
+        "default_compute_type": "int8",
+        "min_vram_mb": 1024,
+        "description": "Zero-shot voice cloning model from Resemble AI.",
     },
     "chatterbox_turbo": {
         "category": "tts",
@@ -247,10 +257,9 @@ class ModelRegistry:
             for model_id, meta in MODEL_REGISTRY.items():
                 target_path = models_dir / meta["folder"]
                 snapshots = target_path / "snapshots"
-                is_downloaded = (
-                    (snapshots.is_dir() and any(p.is_dir() for p in snapshots.iterdir()))
-                    or (target_path.is_dir() and any(target_path.iterdir()))
-                )
+                has_snapshots = snapshots.is_dir() and any(p.is_dir() and any(f.suffix in ('.bin', '.onnx', '.safetensors', '.pt', '.json', '.txt') for f in p.rglob('*')) for p in snapshots.iterdir())
+                has_local_dir = target_path.is_dir() and any(f.suffix in ('.bin', '.onnx', '.safetensors', '.pt', '.json', '.txt') for f in target_path.rglob('*'))
+                is_downloaded = has_snapshots or has_local_dir
                 s = self._state[model_id]
                 if s["status"] in (STATUS_NOT_DOWNLOADED, STATUS_DOWNLOADED):
                     s["status"] = STATUS_DOWNLOADED if is_downloaded else STATUS_NOT_DOWNLOADED
@@ -391,8 +400,15 @@ class ModelRegistry:
         with self._lock:
             s = self._state[model_id]
             event = s.get("_cancel_event")
-            if event and s["status"] == STATUS_DOWNLOADING:
-                event.set()
+            if event or s["status"] == STATUS_DOWNLOADING:
+                if event:
+                    event.set()
+                s["status"]           = STATUS_NOT_DOWNLOADED
+                s["progress"]         = 0.0
+                s["bytes_downloaded"] = 0
+                s["speed_bps"]        = 0.0
+                s["error"]            = "cancelled"
+                s["_cancel_event"]    = None
                 return True
             return False
 

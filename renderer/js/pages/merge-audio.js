@@ -1,14 +1,14 @@
-/* ===== Merge Audio Page — CincoScribe (free, MIT) ===== */
+// Module-level persistent page state across tab switches
+let files = [];
+let isMerging = false;
+let mergedBlob = null;
+let silenceGap = 0; // seconds
+let outputName = 'merged_audio_track.wav';
+let activePreviewIndex = null;
+let activeAudioEl = null;
+let draggedIndex = null;
 
 function renderMergeAudioPage(container) {
-  let files = [];
-  let isMerging = false;
-  let mergedBlob = null;
-  let silenceGap = 0; // seconds
-  let outputName = 'merged_audio_track.wav';
-  let activePreviewIndex = null;
-  let activeAudioEl = null;
-  let draggedIndex = null;
 
   function render() {
     container.innerHTML = `

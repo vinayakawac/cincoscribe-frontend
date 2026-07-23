@@ -1,9 +1,9 @@
 import os
 import shutil
+import threading
 from pathlib import Path
 
 # Primary env var: CINCOSCRIBE_MODELS_DIR
-# Fallback: legacy VOICEBOX_MODELS_DIR, then default path alongside .models
 _env_dir = (
     os.environ.get("CINCOSCRIBE_MODELS_DIR")
     or os.environ.get("VOICEBOX_MODELS_DIR")
@@ -23,7 +23,70 @@ models_dir = DEFAULT_MODELS_DIR
 os.environ["HF_HUB_CACHE"] = str(models_dir)
 
 
-import threading
+def get_data_dir() -> Path:
+    """Return primary app data directory alongside models_dir."""
+    d = models_dir.parent / "data"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_voices_dir() -> Path:
+    """Return voices storage directory."""
+    v = get_data_dir() / "voices"
+    v.mkdir(parents=True, exist_ok=True)
+    return v
+
+
+def get_profiles_dir() -> Path:
+    """Alias for get_voices_dir() for backwards compatibility."""
+    return get_voices_dir()
+
+
+def get_voice_cache_dir() -> Path:
+    """Return voice prompt cache directory."""
+    c = get_data_dir() / "voice_cache"
+    c.mkdir(parents=True, exist_ok=True)
+    return c
+
+
+def get_profile_cache_dir() -> Path:
+    """Alias for get_voice_cache_dir() for backwards compatibility."""
+    return get_voice_cache_dir()
+
+
+def get_generations_dir() -> Path:
+    """Return audio generations output directory."""
+    g = get_data_dir() / "generations"
+    g.mkdir(parents=True, exist_ok=True)
+    return g
+
+
+def get_db_path() -> Path:
+    """Return SQLite database path."""
+    return get_data_dir() / "cincoscribe.db"
+
+
+def to_storage_path(path: str | Path) -> str:
+    """Convert absolute path to a portable relative storage path string under data_dir."""
+    p = Path(path).resolve()
+    base = get_data_dir().resolve()
+    try:
+        return str(p.relative_to(base)).replace("\\", "/")
+    except ValueError:
+        return str(p).replace("\\", "/")
+
+
+def resolve_storage_path(stored: str) -> Path | None:
+    """Resolve a relative storage path string back to absolute Path under data_dir."""
+    if not stored:
+        return None
+    base = get_data_dir()
+    p = Path(stored)
+    if p.is_absolute():
+        return p if p.exists() else None
+    resolved = base / p
+    return resolved if resolved.exists() else None
+
 
 def update_models_dir(new_path_str: str) -> None:
     global models_dir

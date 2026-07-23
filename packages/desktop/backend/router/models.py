@@ -213,13 +213,17 @@ def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
 
         try:
             snapshot_download(**kwargs)
+        except (InterruptedError, KeyboardInterrupt):
+            raise InterruptedError("Download cancelled by user")
         except Exception as net_err:
+            if cancel_event.is_set():
+                raise InterruptedError("Download cancelled by user")
             # Check if local snapshot already exists on disk when network/DNS fails
             snapshots_dir = dest_dir / "snapshots"
             has_local = (
-                (dest_dir.is_dir() and any(dest_dir.iterdir()))
+                (dest_dir.is_dir() and any(f.suffix in ('.bin', '.onnx', '.safetensors', '.pt', '.json', '.txt') for f in dest_dir.rglob('*')))
                 if meta.get("local_dir")
-                else (snapshots_dir.is_dir() and any(p.is_dir() for p in snapshots_dir.iterdir()))
+                else (snapshots_dir.is_dir() and any(p.is_dir() and any(f.suffix in ('.bin', '.onnx', '.safetensors', '.pt', '.json', '.txt') for f in p.rglob('*')) for p in snapshots_dir.iterdir()))
             )
             if has_local:
                 logger.info("[models] Network offline/unavailable (%s); loading from local disk for %s", net_err, model_id)
@@ -243,9 +247,14 @@ def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
         registry.set_failed(model_id, "cancelled")
 
     except Exception as exc:
-        logger.error("[models] Download failed: %s — %s", model_id, exc)
-        _cleanup_partial(dest_dir)
-        registry.set_failed(model_id, str(exc))
+        if cancel_event.is_set() or "cancelled" in str(exc).lower() or isinstance(exc, InterruptedError):
+            logger.info("[models] Download cancelled: %s — cleaning up partial files", model_id)
+            _cleanup_partial(dest_dir)
+            registry.set_failed(model_id, "cancelled")
+        else:
+            logger.error("[models] Download failed: %s — %s", model_id, exc)
+            _cleanup_partial(dest_dir)
+            registry.set_failed(model_id, str(exc))
 
     finally:
         with _active_download_lock:
@@ -258,6 +267,28 @@ def _download_worker(model_id: str, cancel_event: threading.Event) -> None:
 def _cleanup_partial(dest_dir: Path) -> None:
     """Remove incomplete download artefacts."""
     blobs = dest_dir / "blobs"
+    tmp   = dest_dir / "tmp"
+    for p in (blobs, tmp):
+        if p.exists():
+            try:
+                shutil.rmtree(p)
+            except Exception as e:
+                logger.warning("[models] cleanup error for %s: %s", p, e)
+
+    # Clean up incomplete files (.incomplete)
+    if dest_dir.exists():
+        for p in list(dest_dir.rglob("*.incomplete")):
+            try:
+                p.unlink()
+            except Exception:
+                pass
+        # If dest_dir has no model files left, remove dest_dir
+        has_weights = any(f.suffix in ('.bin', '.onnx', '.safetensors', '.pt', '.json', '.txt') for f in dest_dir.rglob('*'))
+        if not has_weights:
+            try:
+                shutil.rmtree(dest_dir)
+            except Exception:
+                pass
     tmp   = dest_dir / "tmp"
     for p in (blobs, tmp):
         if p.exists():
@@ -412,17 +443,15 @@ def load_model(model_id: str, payload: LoadPayload = LoadPayload()):
         )
 
     if not payload.keep_others:
-        loaded_id = registry.get_any_loaded_model_id()
-        if loaded_id and loaded_id != model_id:
-            logger.info("[models] Unloading %s before loading %s", loaded_id, model_id)
-            is_cuda_cur = registry.get(loaded_id).get("device") == "cuda"
-            mem_b = _cuda_mem() if is_cuda_cur else _mem_rss()
-            registry.set_unloaded(loaded_id)
-            gc.collect()
-            _free_cuda_cache()
-            mem_a = _cuda_mem() if is_cuda_cur else _mem_rss()
-            freed_prev = max(0, mem_b - mem_a) if mem_b else None
-            logger.info("[models] Freed ~%s bytes by unloading %s", freed_prev, loaded_id)
+        for item in registry.get_all():
+            loaded_id = item.get("id") or item.get("model_id")
+            if loaded_id and loaded_id != model_id and item.get("status") == STATUS_LOADED:
+                logger.info("[models] Unloading %s before loading %s", loaded_id, model_id)
+                try:
+                    unload_model(loaded_id)
+                except Exception as ex:
+                    logger.warning("[models] Error unloading %s: %s", loaded_id, ex)
+
 
     auto_device, auto_ct = _detect_device()
     device       = payload.device or auto_device
@@ -500,6 +529,21 @@ def unload_model(model_id: str):
         if asr_engine._current_size == model_id:
             asr_engine._model        = None
             asr_engine._current_size = None
+    except Exception:
+        pass
+
+    try:
+        from router.tts import tts_engine
+        if hasattr(tts_engine, "unload"):
+            tts_engine.unload()
+    except Exception:
+        pass
+
+    try:
+        from backends import get_tts_backend_for_engine
+        chatterbox = get_tts_backend_for_engine("chatterbox")
+        if hasattr(chatterbox, "unload_model"):
+            chatterbox.unload_model()
     except Exception:
         pass
 

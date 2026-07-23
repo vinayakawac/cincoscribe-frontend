@@ -1,10 +1,19 @@
-/* ===== Transcribe Page — Real Whisper Transcription ===== */
+// Module-level persistent page state across tab switches
+let selectedFile = null;
+let fileDuration = 0;
+let modelMode = localStorage.getItem('whisperMode') || 'accuracy';
+let language = 'auto';
+let formatMode = 'normal';
+let isTranscribing = false;
+let statusMessage = '';
+let progressPct = 0;
+let transcript = null;
+let liveTranscript = [];
+let activeTranscriptTab = 'plain';
 
 function renderTranscribePage(container) {
-  let selectedFile = AppState.selectedAudioFile || null;
-  let fileDuration = 0;
-
   if (AppState.selectedAudioFile) {
+    selectedFile = AppState.selectedAudioFile;
     AppState.selectedAudioFile = null;
     const audio = document.createElement('audio');
     audio.src = URL.createObjectURL(selectedFile);
@@ -22,20 +31,13 @@ function renderTranscribePage(container) {
     { id: 'turbo',    name: 'Whisper Turbo' },
   ];
 
-  let modelMode = localStorage.getItem('whisperMode') || 'accuracy'; // whisper mode key
-  let language = 'auto';
-  let formatMode = 'normal'; // 'normal' | 'timestamps'
-  let isTranscribing = false;
-  let statusMessage = '';
-  let progressPct = 0;
-  let transcript = null;
-  let liveTranscript = [];
-  let activeTranscriptTab = 'plain'; // 'timestamps' | 'plain'
-
   async function getSidecarBaseUrl() {
-    let port = 3901;
+    let port = 5555;
     if (window.electronAPI && window.electronAPI.getSidecarPort) {
-      try { port = await window.electronAPI.getSidecarPort(); } catch (e) {}
+      try {
+        const p = await window.electronAPI.getSidecarPort();
+        if (p) port = p;
+      } catch (e) {}
     }
     const hostname = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? '127.0.0.1'

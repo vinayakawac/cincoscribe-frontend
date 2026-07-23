@@ -29,10 +29,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPath:       (target)   => ipcRenderer.invoke('open-path', target),
 
   // Model lifecycle — three-operation contract: download → load → unload
+  modelsGetAll:         ()             => ipcRenderer.invoke('models:getAll'),
+  modelsDownloadStatus: (modelId)      => ipcRenderer.invoke('models:downloadStatus', modelId),
   modelsDownload:       (modelId)      => ipcRenderer.invoke('models:download', modelId),
   modelsDownloadCancel: (modelId)      => ipcRenderer.invoke('models:download:cancel', modelId),
   modelsLoad:           (modelId, opts) => ipcRenderer.invoke('models:load', { modelId, ...opts }),
   modelsUnload:         (modelId)      => ipcRenderer.invoke('models:unload', modelId),
+
+  // Voices API IPC Bridge
+  voicesCreate:       (voiceData)                => ipcRenderer.invoke('voices:create', voiceData),
+  voicesList:         ()                         => ipcRenderer.invoke('voices:list'),
+  voicesGet:          (voiceId)                  => ipcRenderer.invoke('voices:get', voiceId),
+  voicesUpdate:       (voiceData)                => ipcRenderer.invoke('voices:update', voiceData),
+  voicesDelete:       (voiceId)                  => ipcRenderer.invoke('voices:delete', voiceId),
+  voicesAddSample:    (voiceId, filePath, text)  => ipcRenderer.invoke('voices:addSample', { voiceId, filePath, referenceText: text }),
+  voicesGetSamples:   (voiceId)                  => ipcRenderer.invoke('voices:getSamples', voiceId),
+  voicesDeleteSample: (sampleId)                 => ipcRenderer.invoke('voices:deleteSample', sampleId),
 });
 
 contextBridge.exposeInMainWorld('cincoscribe', {

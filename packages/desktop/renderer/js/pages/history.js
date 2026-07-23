@@ -1,219 +1,393 @@
-/* ===== History Page ===== */
+/* ===== Revamped History Page — CincoScribe ===== */
 
 function renderHistoryPage(container) {
-  let selectedIdx = null;
-  let activeFilterTab = 'all'; // 'all' | 'transcribe' | 'speech'
+  let selectedId = null;
+  let activeFilterTab = 'all'; // 'all' | 'transcribe' | 'speech' | 'merge'
+  let searchQuery = '';
+  let sortBy = 'newest'; // 'newest' | 'oldest' | 'words' | 'duration'
+
+  function getFilteredItems() {
+    const rawItems = AppState.history || [];
+
+    return rawItems.filter(item => {
+      const modeLower = (item.mode || '').toLowerCase();
+      const textContent = (item.text || '').toLowerCase();
+      const nameContent = (item.name || '').toLowerCase();
+
+      const isSpeech = modeLower.includes('kittentts') || modeLower.includes('tts') || modeLower.includes('kokoro') || modeLower.includes('chatterbox') || modeLower.includes('speech') || textContent.includes('[speech synthesis');
+      const isMerge = modeLower.includes('merge');
+      const isTranscribe = !isSpeech && !isMerge;
+
+      if (activeFilterTab === 'transcribe' && !isTranscribe) return false;
+      if (activeFilterTab === 'speech' && !isSpeech) return false;
+      if (activeFilterTab === 'merge' && !isMerge) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        return nameContent.includes(q) || textContent.includes(q);
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'oldest') return new Date(a.date) - new Date(b.date);
+      if (sortBy === 'words') return (b.wordCount || 0) - (a.wordCount || 0);
+      if (sortBy === 'duration') return (b.duration || 0) - (a.duration || 0);
+      return new Date(b.date) - new Date(a.date); // newest default
+    });
+  }
 
   function render() {
-    const rawItems = AppState.history;
+    const rawItems = AppState.history || [];
+    const items = getFilteredItems();
 
-    // Filter items based on activeFilterTab
-    const items = rawItems.filter(item => {
+    const transcribeCount = rawItems.filter(item => {
       const modeLower = (item.mode || '').toLowerCase();
-      const isSpeech = modeLower.includes('kittentts') || (item.text || '').includes('[Speech Synthesis');
-      
-      if (activeFilterTab === 'transcribe') {
-        return !isSpeech;
-      }
-      if (activeFilterTab === 'speech') {
-        return isSpeech;
-      }
-      return true;
-    });
+      const isSpeech = modeLower.includes('kittentts') || modeLower.includes('tts') || modeLower.includes('kokoro') || modeLower.includes('chatterbox') || modeLower.includes('speech') || (item.text || '').includes('[speech synthesis');
+      const isMerge = modeLower.includes('merge');
+      return !isSpeech && !isMerge;
+    }).length;
 
-    // Safety bounds check
+    const speechCount = rawItems.filter(item => {
+      const modeLower = (item.mode || '').toLowerCase();
+      return modeLower.includes('kittentts') || modeLower.includes('tts') || modeLower.includes('kokoro') || modeLower.includes('chatterbox') || modeLower.includes('speech') || (item.text || '').includes('[speech synthesis');
+    }).length;
+
+    const mergeCount = rawItems.filter(item => (item.mode || '').toLowerCase().includes('merge')).length;
+
+    // Maintain selection state
     if (items.length > 0) {
-      if (selectedIdx === null || selectedIdx >= items.length) {
-        selectedIdx = 0;
+      if (!selectedId || !items.some(i => (i.id || i.date) === selectedId)) {
+        selectedId = items[0].id || items[0].date;
       }
     } else {
-      selectedIdx = null;
+      selectedId = null;
     }
 
+    const activeItem = items.find(i => (i.id || i.date) === selectedId);
+
     container.innerHTML = `
-      <div class="page-container no-scroll-layout">
+      <style>
+        .history-revamped-page {
+          animation: fade-up 280ms cubic-bezier(0.16,1,0.3,1) both;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          height: 100%;
+          width: 100%;
+        }
+        .history-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--clr-border, rgba(255,255,255,0.08));
+        }
+        .history-search-input {
+          background: var(--clr-bg-subtle, #1d1d1d);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: var(--radius-full, 9999px);
+          padding: 8px 16px;
+          color: var(--clr-text, #fff);
+          font-size: 13px;
+          outline: none;
+          width: 280px;
+          transition: border-color 0.2s ease;
+        }
+        .history-search-input:focus {
+          border-color: var(--clr-primary, #d4a359);
+        }
+        .history-card-item {
+          background: var(--clr-bg-subtle, #1d1d1d);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: var(--radius-lg, 10px);
+          padding: 14px 16px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .history-card-item:hover {
+          background: var(--clr-surface-raised, #262626);
+          border-color: rgba(255,255,255,0.12);
+        }
+        .history-card-item.selected {
+          border-color: var(--clr-primary, #d4a359);
+          background: rgba(212, 163, 89, 0.08);
+        }
+        .history-badge {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: var(--radius-full, 9999px);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+        .history-badge-speech { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .history-badge-transcribe { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .history-badge-merge { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+      </style>
+
+      <div class="history-revamped-page">
+        <!-- Top Toolbar -->
+        <div class="history-topbar">
+          <!-- Filter Tabs -->
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-ghost btn-sm ${activeFilterTab === 'all' ? 'active' : ''}" data-filter-tab="all" style="font-size: 12px; border-radius: var(--radius-full); padding: 6px 14px; ${activeFilterTab === 'all' ? 'background: var(--clr-primary); color: black; font-weight: bold;' : 'color: var(--clr-text-muted);'}">
+              All (${rawItems.length})
+            </button>
+            <button class="btn-ghost btn-sm ${activeFilterTab === 'transcribe' ? 'active' : ''}" data-filter-tab="transcribe" style="font-size: 12px; border-radius: var(--radius-full); padding: 6px 14px; ${activeFilterTab === 'transcribe' ? 'background: var(--clr-primary); color: black; font-weight: bold;' : 'color: var(--clr-text-muted);'}">
+              Transcribe (${transcribeCount})
+            </button>
+            <button class="btn-ghost btn-sm ${activeFilterTab === 'speech' ? 'active' : ''}" data-filter-tab="speech" style="font-size: 12px; border-radius: var(--radius-full); padding: 6px 14px; ${activeFilterTab === 'speech' ? 'background: var(--clr-primary); color: black; font-weight: bold;' : 'color: var(--clr-text-muted);'}">
+              Speech (${speechCount})
+            </button>
+            <button class="btn-ghost btn-sm ${activeFilterTab === 'merge' ? 'active' : ''}" data-filter-tab="merge" style="font-size: 12px; border-radius: var(--radius-full); padding: 6px 14px; ${activeFilterTab === 'merge' ? 'background: var(--clr-primary); color: black; font-weight: bold;' : 'color: var(--clr-text-muted);'}">
+              Merges (${mergeCount})
+            </button>
+          </div>
+
+          <!-- Search & Controls -->
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="history-search-input" class="history-search-input" placeholder="Search history items..." value="${escapeHtml(searchQuery)}">
+            <select id="history-sort-select" style="background: var(--clr-bg-subtle, #1d1d1d); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-lg); padding: 8px 12px; color: var(--clr-text); font-size: 12px; outline: none; cursor: pointer;">
+              <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Newest First</option>
+              <option value="oldest" ${sortBy === 'oldest' ? 'selected' : ''}>Oldest First</option>
+              <option value="words" ${sortBy === 'words' ? 'selected' : ''}>Most Words</option>
+              <option value="duration" ${sortBy === 'duration' ? 'selected' : ''}>Longest Duration</option>
+            </select>
+            ${rawItems.length > 0 ? `
+              <button class="btn-ghost btn-sm" id="btn-clear-all-history" style="color: var(--clr-error, #ef4444); font-size: 12px; padding: 6px 12px;" title="Clear entire history">
+                ${Utils.icons.trash} Clear All
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Main Body Grid -->
         ${rawItems.length === 0 ? `
-          <div class="empty-state" style="margin-top: var(--sp-8); border: none; background: transparent;">
-            <div class="empty-icon" style="display:flex; justify-content:center; align-items:center;">${Utils.icons.clipboard}</div>
-            <p class="empty-title">No history yet</p>
-            <p class="empty-desc">Your transcription and speech history will appear here once generated.</p>
-            <button class="btn btn-primary btn-sm" style="margin-top:var(--sp-4); background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 8px 18px;" onclick="Router.navigate('dashboard/transcribe')">Start Transcribing</button>
+          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 60px 20px; background: var(--clr-bg-subtle, #1d1d1d); border-radius: var(--radius-xl); border: 1px solid rgba(255,255,255,0.05);">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(212, 163, 89, 0.1); display: flex; align-items: center; justify-content: center; color: var(--clr-primary, #d4a359); margin-bottom: 16px;">
+              ${Utils.icons.clipboard}
+            </div>
+            <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700; color: #fff;">No History Yet</h3>
+            <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--clr-text-muted); max-width: 360px; line-height: 1.5;">Your audio transcriptions and generated speech tracks will automatically be saved here.</p>
+            <div style="display: flex; gap: 12px;">
+              <button class="btn btn-primary btn-sm" style="background: white; color: black; font-weight: bold; border-radius: var(--radius-full); padding: 10px 22px; font-size: 12px;" onclick="Router.navigate('dashboard/transcribe')">Start Transcribing</button>
+              <button class="btn btn-secondary btn-sm" style="border-radius: var(--radius-full); padding: 10px 22px; font-size: 12px;" onclick="Router.navigate('dashboard/text-to-voice')">Generate Speech</button>
+            </div>
           </div>
         ` : `
-          <div class="split-layout" style="grid-template-columns: 1fr 1.3fr;">
-            <div class="layout-main" style="display:flex; flex-direction:column; gap:var(--sp-3); height: 100%;">
-              <!-- Filter Tabs -->
-              <div class="layout-tabs" style="margin: 0; padding: 0; background: transparent; border: none; display: flex; gap: var(--sp-2);">
-                <div class="layout-tab ${activeFilterTab === 'all' ? 'active' : ''}" data-filter-tab="all" style="font-size: 13px;">All</div>
-                <div class="layout-tab ${activeFilterTab === 'transcribe' ? 'active' : ''}" data-filter-tab="transcribe" style="font-size: 13px;">Transcribe</div>
-                <div class="layout-tab ${activeFilterTab === 'speech' ? 'active' : ''}" data-filter-tab="speech" style="font-size: 13px;">Speech</div>
-              </div>
-
+          <div class="split-layout" style="grid-template-columns: 1fr 1.3fr; gap: 16px; flex: 1; min-height: 0;">
+            <!-- Left Item List -->
+            <div style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px;">
               ${items.length === 0 ? `
-                <div class="empty-state" style="margin-top: var(--sp-6); border: none; background: transparent; flex: 1;">
-                  <p class="empty-title" style="font-size: 14px;">No items found</p>
-                  <p class="empty-desc" style="font-size: 12px;">There are no entries matching the selected filter.</p>
+                <div style="padding: 32px; text-align: center; color: var(--clr-text-muted); font-size: 13px; background: var(--clr-bg-subtle); border-radius: var(--radius-lg);">
+                  No history items match your search filter.
                 </div>
               ` : `
-                <div class="history-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                  ${items.map((item, idx) => {
-                    const modeLower = (item.mode || '').toLowerCase();
-                    const isSpeech = modeLower.includes('kittentts') || (item.text || '').includes('[Speech Synthesis');
-                    return `
-                      <div class="history-item ${selectedIdx === idx ? 'selected' : ''}" data-select-history="${idx}" style="border: none; background: var(--clr-bg-subtle); border-radius: var(--radius-lg); padding: 12px 14px; cursor: pointer; transition: background var(--dur-fast);">
-                        <div class="history-info">
-                          <p class="history-name" style="font-size:13px; font-weight:var(--fw-semibold); margin-bottom:4px; line-height:1.4; color: var(--clr-text);" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
-                          <div class="history-item-meta" style="font-size:10px; color: var(--clr-text-faint); display: flex; gap: 8px; align-items: center;">
-                            <span>${Utils.formatDate(item.date)}</span>
-                            <span>•</span>
-                            <span>${Utils.formatDuration(item.duration)}</span>
-                            <span>•</span>
-                            <span>${Utils.formatNumber(item.wordCount)} words</span>
-                            <span>•</span>
-                            <span style="display:inline-flex; align-items:center; gap:2px;">
-                              ${isSpeech ? `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>` : item.mode === 'accuracy' ? Utils.icons.target : Utils.icons.bolt}
-                              ${isSpeech ? 'Speech' : item.mode === 'accuracy' ? 'Accuracy' : item.mode === 'audio-merge' ? 'Merge' : 'Fast'}
-                            </span>
-                          </div>
-                        </div>
+                ${items.map(item => {
+                  const itemId = item.id || item.date;
+                  const modeLower = (item.mode || '').toLowerCase();
+                  const isSpeech = modeLower.includes('kittentts') || modeLower.includes('tts') || modeLower.includes('kokoro') || modeLower.includes('chatterbox') || modeLower.includes('speech') || (item.text || '').includes('[speech synthesis');
+                  const isMerge = modeLower.includes('merge');
+
+                  let badgeClass = 'history-badge-transcribe';
+                  let badgeLabel = 'Transcribe';
+                  if (isSpeech) { badgeClass = 'history-badge-speech'; badgeLabel = 'Speech'; }
+                  if (isMerge) { badgeClass = 'history-badge-merge'; badgeLabel = 'Merge'; }
+
+                  return `
+                    <div class="history-card-item ${selectedId === itemId ? 'selected' : ''}" data-select-history-id="${itemId}">
+                      <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span class="history-badge ${badgeClass}">${badgeLabel}</span>
+                        <span style="font-size: 10px; color: var(--clr-text-faint);">${Utils.formatDate(item.date)}</span>
                       </div>
-                    `;
-                  }).join('')}
-                </div>
+                      <div style="font-size: 13px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.name)}">
+                        ${escapeHtml(item.name)}
+                      </div>
+                      <div style="font-size: 11px; color: var(--clr-text-muted); display: flex; gap: 10px; align-items: center;">
+                        <span>Duration: ${Utils.formatDuration(item.duration)}</span>
+                        <span>•</span>
+                        <span>${Utils.formatNumber(item.wordCount || 0)} words</span>
+                        ${item.language ? `<span>•</span><span style="text-transform: uppercase;">${escapeHtml(item.language)}</span>` : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
               `}
             </div>
 
-            <div class="layout-sidebar">
-              ${renderDetailsPane(items[selectedIdx])}
+            <!-- Right Detail Preview Pane -->
+            <div style="background: var(--clr-bg-subtle, #1d1d1d); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-xl); padding: 20px; display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: hidden;">
+              ${renderDetailsPane(activeItem)}
             </div>
           </div>
         `}
       </div>
     `;
+
     bindEvents();
   }
 
   function renderDetailsPane(activeItem) {
-    if (!activeItem) return '';
+    if (!activeItem) {
+      return `
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--clr-text-muted); font-size: 13px;">
+          Select a history entry from the list to view details and export options.
+        </div>
+      `;
+    }
+
     const modeLower = (activeItem.mode || '').toLowerCase();
-    const isSpeech = modeLower.includes('kittentts') || (activeItem.text || '').includes('[Speech Synthesis');
+    const isSpeech = modeLower.includes('kittentts') || modeLower.includes('tts') || modeLower.includes('kokoro') || modeLower.includes('chatterbox') || modeLower.includes('speech') || (activeItem.text || '').includes('[speech synthesis');
 
     return `
-      <div style="display:flex; flex-direction:column; gap:var(--sp-4); flex: 1; min-height: 0; height: 100%;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:var(--sp-4);">
-          <div style="min-width:0;">
-            <h3 class="transcript-title" style="margin:0; font-size:var(--fs-sm); font-weight:var(--fw-semibold); color:var(--clr-text); word-break:break-all;" title="${escapeHtml(activeItem.name)}">${escapeHtml(activeItem.name)}</h3>
-            <p style="font-size:11px; color:var(--clr-text-faint); margin:4px 0 0 0;">${isSpeech ? 'Generated' : 'Transcribed'} on ${Utils.formatDate(activeItem.date)}</p>
-          </div>
-          <div style="display:flex; gap:var(--sp-2); flex-shrink:0;">
-            <button class="btn-ghost btn-sm" id="btn-copy-history" title="Copy transcript" style="font-size: 11px;">${Utils.icons.copy} Copy</button>
-            <button class="btn-ghost btn-sm" id="btn-download-history" title="Download transcript" style="font-size: 11px;">${Utils.icons.download} Download</button>
-            <button class="btn-ghost btn-sm" id="btn-delete-history" style="color:var(--clr-error); font-size: 11px;" title="Delete entry">${Utils.icons.trash} Delete</button>
+      <!-- Header Info & Actions -->
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+        <div>
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff; line-height: 1.3; word-break: break-word;" title="${escapeHtml(activeItem.name)}">
+            ${escapeHtml(activeItem.name)}
+          </h3>
+          <div style="font-size: 11px; color: var(--clr-text-faint); margin-top: 4px;">
+            Created on ${Utils.formatDate(activeItem.date)}
           </div>
         </div>
 
-        <div class="transcript-stats" style="border: none; background: var(--clr-bg-subtle); padding: 12px 14px; border-radius: var(--radius-lg); margin: 0; font-size: 11px;">
-          <span><span class="stat-label">Duration </span><span class="stat-value" style="font-weight: 600; color: var(--clr-text);">${Utils.formatDuration(activeItem.duration)}</span></span>
-          <span><span class="stat-label">Words </span><span class="stat-value" style="font-weight: 600; color: var(--clr-text);">${Utils.formatNumber(activeItem.wordCount)}</span></span>
-          <span><span class="stat-label">${isSpeech ? 'Voice Model' : 'Language'} </span><span class="stat-value" style="text-transform: capitalize; font-weight: 600; color: var(--clr-text);">${isSpeech ? activeItem.mode : (activeItem.language || 'auto')}</span></span>
+        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+          <button class="btn-ghost btn-sm" id="btn-copy-history" title="Copy transcript text" style="font-size: 11px; padding: 6px 10px;">
+            ${Utils.icons.copy} Copy
+          </button>
+          <button class="btn-ghost btn-sm" id="btn-download-history" title="Download text file" style="font-size: 11px; padding: 6px 10px;">
+            ${Utils.icons.download} Download
+          </button>
+          <button class="btn-ghost btn-sm" id="btn-delete-history" style="color: var(--clr-error, #ef4444); font-size: 11px; padding: 6px 10px;" title="Delete this entry">
+            ${Utils.icons.trash}
+          </button>
         </div>
+      </div>
 
-        <!-- Scrollable text content block -->
-        <div class="textarea-wrapper" style="flex:1; display:flex; flex-direction:column; min-height: 0;">
-          <pre style="margin: 0; padding: var(--sp-4); overflow-y: auto; flex: 1; font-size: 13px; font-family: var(--ff-mono); line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: var(--clr-bg-code); color: var(--clr-text-muted); border-radius: var(--radius-xl); border: none; height: 100%;">${escapeHtml(activeItem.text)}</pre>
+      <!-- Key Metadata Stats Bar -->
+      <div style="display: flex; gap: 16px; padding: 10px 14px; background: rgba(0,0,0,0.3); border-radius: var(--radius-lg); font-size: 11px; color: var(--clr-text-muted);">
+        <div>
+          <span style="color: var(--clr-text-faint);">Duration:</span>
+          <strong style="color: #fff; margin-left: 4px;">${Utils.formatDuration(activeItem.duration)}</strong>
         </div>
+        <div>
+          <span style="color: var(--clr-text-faint);">Word Count:</span>
+          <strong style="color: #fff; margin-left: 4px;">${Utils.formatNumber(activeItem.wordCount || 0)}</strong>
+        </div>
+        <div>
+          <span style="color: var(--clr-text-faint);">${isSpeech ? 'Voice / Engine:' : 'Mode / Model:'}</span>
+          <strong style="color: #fff; margin-left: 4px; text-transform: capitalize;">${escapeHtml(activeItem.mode || 'standard')}</strong>
+        </div>
+      </div>
+
+      <!-- Transcript / Text Viewer -->
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <pre style="margin: 0; padding: 14px; font-family: var(--ff-mono); font-size: 12px; line-height: 1.6; color: #d4d4d4; background: var(--clr-bg-code, #101010); border-radius: var(--radius-lg); border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; flex: 1; white-space: pre-wrap; word-break: break-word;">${escapeHtml(activeItem.text || '')}</pre>
       </div>
     `;
   }
 
   function escapeHtml(str) {
+    if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   }
 
   function bindEvents() {
+    // Filter tabs
     container.querySelectorAll('[data-filter-tab]').forEach(tab => {
       tab.addEventListener('click', () => {
         activeFilterTab = tab.getAttribute('data-filter-tab');
-        selectedIdx = 0;
         render();
       });
     });
 
-    container.querySelectorAll('[data-select-history]').forEach(item => {
-      item.addEventListener('click', () => {
-        selectedIdx = parseInt(item.getAttribute('data-select-history'));
+    // Search input
+    const searchInput = document.getElementById('history-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        searchQuery = searchInput.value;
+        render();
+        const reSearch = document.getElementById('history-search-input');
+        if (reSearch) {
+          reSearch.focus();
+          reSearch.setSelectionRange(searchQuery.length, searchQuery.length);
+        }
+      });
+    }
+
+    // Sort select
+    const sortSelect = document.getElementById('history-sort-select');
+    if (sortSelect) {
+      sortSelect.addEventListener('change', () => {
+        sortBy = sortSelect.value;
+        render();
+      });
+    }
+
+    // Select history item
+    container.querySelectorAll('[data-select-history-id]').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedId = card.getAttribute('data-select-history-id');
         render();
       });
     });
 
+    // Copy action
     const copyBtn = document.getElementById('btn-copy-history');
-    if (copyBtn) {
+    if (copyBtn && selectedId) {
       copyBtn.addEventListener('click', () => {
-        const rawItems = AppState.history;
-        const items = rawItems.filter(item => {
-          const modeLower = (item.mode || '').toLowerCase();
-          const isSpeech = modeLower.includes('kittentts') || (item.text || '').includes('[Speech Synthesis');
-          
-          if (activeFilterTab === 'transcribe') return !isSpeech;
-          if (activeFilterTab === 'speech') return isSpeech;
-          return true;
-        });
-
-        const activeItem = items[selectedIdx];
-        if (activeItem) {
-          navigator.clipboard.writeText(activeItem.text);
-          Utils.showToast('Transcript copied to clipboard!');
+        const item = (AppState.history || []).find(i => (i.id || i.date) === selectedId);
+        if (item && item.text) {
+          Utils.copyToClipboard(item.text);
         }
       });
     }
 
+    // Download action
     const downloadBtn = document.getElementById('btn-download-history');
-    if (downloadBtn) {
+    if (downloadBtn && selectedId) {
       downloadBtn.addEventListener('click', () => {
-        const rawItems = AppState.history;
-        const items = rawItems.filter(item => {
-          const modeLower = (item.mode || '').toLowerCase();
-          const isSpeech = modeLower.includes('kittentts') || (item.text || '').includes('[Speech Synthesis');
-          
-          if (activeFilterTab === 'transcribe') return !isSpeech;
-          if (activeFilterTab === 'speech') return isSpeech;
-          return true;
-        });
-
-        const activeItem = items[selectedIdx];
-        if (activeItem) {
-          const blob = new Blob([activeItem.text], { type: 'text/plain;charset=utf-8' });
-          Utils.downloadBlob(blob, activeItem.name.replace(/\.[^/.]+$/, "") + '.txt');
+        const item = (AppState.history || []).find(i => (i.id || i.date) === selectedId);
+        if (item && item.text) {
+          const fname = (item.name || 'transcript').replace(/\.[^/.]+$/, '') + '.txt';
+          Utils.downloadText(item.text, fname);
         }
       });
     }
 
-    const deleteBtn = container.querySelector('#btn-delete-history');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const rawItems = AppState.history;
-        const items = rawItems.filter(item => {
-          const modeLower = (item.mode || '').toLowerCase();
-          const isSpeech = modeLower.includes('kittentts') || (item.text || '').includes('[Speech Synthesis');
-          
-          if (activeFilterTab === 'transcribe') return !isSpeech;
-          if (activeFilterTab === 'speech') return isSpeech;
-          return true;
-        });
-
-        const activeItem = items[selectedIdx];
-        if (activeItem) {
-          if (confirm(`Are you sure you want to delete "${activeItem.name}" from history?`)) {
-            AppState.deleteHistory(activeItem.id || activeItem.date);
-            selectedIdx = null;
+    // Delete single entry
+    const deleteBtn = document.getElementById('btn-delete-history');
+    if (deleteBtn && selectedId) {
+      deleteBtn.addEventListener('click', () => {
+        const item = (AppState.history || []).find(i => (i.id || i.date) === selectedId);
+        if (item) {
+          if (confirm(`Delete "${item.name}" from history?`)) {
+            AppState.deleteHistory(selectedId);
+            selectedId = null;
             render();
-            Utils.showToast('Entry deleted from history.');
+            Utils.showToast('Entry deleted');
           }
+        }
+      });
+    }
+
+    // Clear all history
+    const clearAllBtn = document.getElementById('btn-clear-all-history');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear your entire history? This cannot be undone.')) {
+          AppState.history = [];
+          AppState.save();
+          AppState._notify();
+          render();
+          Utils.showToast('History cleared');
         }
       });
     }
